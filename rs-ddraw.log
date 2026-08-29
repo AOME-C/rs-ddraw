@@ -1,0 +1,11 @@
+=== rs-ddraw log started (C:\Program Files (x86)\Mental Omega\rs-ddraw.log) ===
+[        0 ms] DllMain(DLL_PROCESS_ATTACH) hModule=0x6c800000
+[      220 ms] DirectDrawCreate(lpGUID=0x0, lplpDD=0x8a0094, pUnkOuter=0x0)
+[      223 ms]   -> DD_OK (IDirectDraw created)
+[      223 ms] IDirectDraw::SetCooperativeLevel(hwnd=0x290fba, flags=0x11)
+[      223 ms] SetCooperativeLevel: subclass done
+[      223 ms] SetCooperativeLevel: SetPixelFormat begin
+[      335 ms] SetCooperativeLevel: SetPixelFormat done
+[      335 ms] SetCooperativeLevel: screen dims done (2560)
+[     5185 ms] kill-switch (Ctrl+Shift+Q) triggered, forcing exit
+[     5192 ms] DllMain(DLL_PROCESS_DETACH)

@@ -20,6 +20,11 @@ pub unsafe extern "system" fn DirectDrawCreate(
         dd_log!("  -> E_INVALIDARG (lplpDD is null)");
         return E_INVALIDARG;
     }
+    unsafe {
+        crate::config::load();
+        crate::hook::init();
+        crate::util::init_system();
+    }
     let dd: IDirectDraw = DirectDrawImpl {}.into();
     unsafe { *lplpdd = Some(dd) };
     dd_log!("  -> DD_OK (IDirectDraw created)");
@@ -39,7 +44,12 @@ pub unsafe extern "system" fn DirectDrawCreateEx(
         return E_INVALIDARG;
     }
     let dd: IDirectDraw7 = DirectDrawImpl {}.into();
-    unsafe { *lplpdd = Some(dd) };
+    unsafe {
+        crate::config::load();
+        crate::hook::init();
+        crate::util::init_system();
+        *lplpdd = Some(dd);
+    }
     dd_log!("  -> DD_OK (IDirectDraw7 created)");
     HRESULT(0)
 }

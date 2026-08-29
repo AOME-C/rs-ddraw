@@ -109,6 +109,7 @@ use windows::Win32::Graphics::OpenGL::{HGLRC, PIXELFORMATDESCRIPTOR};
 // Renderer types
 pub const RENDERER_GDI: i32 = 0;
 pub const RENDERER_OPENGL: i32 = 1;
+pub const RENDERER_D3D9: i32 = 2;
 
 // DMDFO (fixed display output)
 pub const DMDFO_DEFAULT: u32 = 0x0000_0000;
@@ -345,6 +346,12 @@ impl Default for DDrawState {
 }
 
 static STATE: OnceLock<Arc<Mutex<DDrawState>>> = OnceLock::new();
+
+/// Whether 16-bit primary surfaces use RGB555 (X1R5G5B5) instead of the
+/// default RGB565. Set from the `rgb555` INI option during config load. Kept as
+/// a lock-free atomic so surface/renderer code can read it without touching the
+/// main state mutex (avoids re-entrant lock deadlocks).
+pub static RGB555: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Access the global shared DirectDraw state.
 pub fn state() -> &'static Arc<Mutex<DDrawState>> {

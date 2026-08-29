@@ -8,7 +8,7 @@ use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
 
-use crate::state::{state, TIMER_FIX_WINDOWPOS};
+use crate::state::{state, RENDERER_D3D9, RENDERER_GDI, RENDERER_OPENGL, TIMER_FIX_WINDOWPOS};
 
 // Virtual key constants (numeric to avoid enum casts).
 const VK_TAB: i32 = 0x09;
@@ -145,8 +145,15 @@ unsafe fn handle_hotkeys(_hwnd: HWND, key: i32) {
                 if st.auto_renderer {
                     let r = st.renderer;
                     drop(st);
-                    // Switch renderer (GL <-> GDI).
-                    crate::state::set_renderer(if r == 0 { 1 } else { 0 });
+                    // Cycle renderer: GDI -> OpenGL -> D3D9 -> GDI.
+                    let next = if r == RENDERER_GDI {
+                        RENDERER_OPENGL
+                    } else if r == RENDERER_OPENGL {
+                        RENDERER_D3D9
+                    } else {
+                        RENDERER_GDI
+                    };
+                    crate::state::set_renderer(next);
                     // Force the running renderer to re-init.
                     let mut s = state().lock().unwrap();
                     s.render.invalidate = true;

@@ -1,5 +1,6 @@
 //! Renderer thread and backend orchestration (ports `render.c`).
 
+pub(crate) mod d3d9;
 pub(crate) mod gdi;
 pub(crate) mod opengl;
 
@@ -17,7 +18,19 @@ static PRESENT_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 static NO_PRIMARY_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 use crate::counter::{counter_get, counter_start};
-use crate::state::{state, RENDERER_GDI, RENDERER_OPENGL, SurfaceBuffers};
+use crate::state::{
+    state, RENDERER_D3D9, RENDERER_GDI, RENDERER_OPENGL, SurfaceBuffers,
+};
+
+/// Human-readable name for a `RENDERER_*` id (used in logs).
+fn renderer_name(r: i32) -> &'static str {
+    match r {
+        RENDERER_D3D9 => "d3d9",
+        RENDERER_OPENGL => "opengl",
+        RENDERER_GDI => "gdi",
+        _ => "unknown",
+    }
+}
 
 /// Draw the current FPS counter on the destination DC (used when `DrawFPS` is on).
 pub(crate) unsafe fn draw_fps(hdc: HDC, fps: f64) {
@@ -128,32 +141,85 @@ fn render_thread() {
         thread::sleep(Duration::from_millis(10));
     }
 
-    let use_gl = { state().lock().unwrap().renderer == RENDERER_OPENGL };
-    crate::dd_log!(
-        "render thread started, use_gl={}, target_fps={}",
-        use_gl,
-        { state().lock().unwrap().target_fps }
-    );
+    enum Backend {
+        D3D9(d3d9::D3D9State),
+        GL(opengl::OglState),
+        GDI,
+    }
 
-    let mut ogl = if use_gl {
-        let (hdc, w, h) = {
-            let st = state().lock().unwrap();
-            (st.hdc, st.width, st.height)
-        };
-        if hdc.is_invalid() {
-            None
-        } else {
-            match opengl::OglState::new(hdc, w, h) {
-                Some(g) => Some(g),
+    let (hwnd, hdc, w, h, renderer, auto) = {
+        let st = state().lock().unwrap();
+        (
+            st.hwnd,
+            st.hdc,
+            st.width,
+            st.height,
+            st.renderer,
+            st.auto_renderer,
+        )
+    };
+
+    // Auto order: D3D9 -> OpenGL -> GDI. An explicit choice falls back to GDI if
+    // its backend fails to initialize.
+    let order: [i32; 4] = if auto {
+        [RENDERER_D3D9, RENDERER_OPENGL, RENDERER_GDI, RENDERER_GDI]
+    } else {
+        [renderer, RENDERER_GDI, RENDERER_GDI, RENDERER_GDI]
+    };
+
+    let mut backend = {
+        let mut chosen = RENDERER_GDI;
+        let mut result: Option<Backend> = None;
+        for &r in &order {
+            let b = match r {
+                RENDERER_D3D9 => d3d9::D3D9State::new(hwnd, w, h).map(Backend::D3D9),
+                RENDERER_OPENGL => opengl::OglState::new(hdc, w, h).map(Backend::GL),
+                RENDERER_GDI => Some(Backend::GDI),
+                _ => None,
+            };
+            match b {
+                Some(bk) => {
+                    chosen = r;
+                    result = Some(bk);
+                    break;
+                }
                 None => {
-                    state().lock().unwrap().renderer = RENDERER_GDI;
-                    None
+                    crate::dd_log!(
+                        "renderer {} unavailable, switching to {}",
+                        renderer_name(r),
+                        renderer_name(if r == RENDERER_GDI {
+                            RENDERER_GDI
+                        } else {
+                            order[order.iter().position(|&x| x == r).unwrap() + 1]
+                        })
+                    );
                 }
             }
         }
-    } else {
-        None
+        if let Some(bk) = result {
+            if chosen != RENDERER_GDI {
+                if auto {
+                    crate::dd_log!("auto: selected renderer {}", renderer_name(chosen));
+                } else {
+                    crate::dd_log!("renderer {} initialized", renderer_name(chosen));
+                }
+            }
+            state().lock().unwrap().renderer = chosen;
+            bk
+        } else {
+            Backend::GDI
+        }
     };
+
+    crate::dd_log!(
+        "render thread started, backend={}, target_fps={}",
+        match backend {
+            Backend::D3D9(_) => "d3d9",
+            Backend::GL(_) => "opengl",
+            Backend::GDI => "gdi",
+        },
+        { state().lock().unwrap().target_fps }
+    );
 
     let mut start = counter_start();
     let mut last_w: i32 = -1;
@@ -171,12 +237,12 @@ fn render_thread() {
         // uploads on `surface_updated` (raised on Blt/Flip/Unlock/ReleaseDC of
         // the primary), i.e. *after* the draw finishes — never on
         // WaitForVerticalBlank, which many games call *before* drawing. Uploading
-        // on vblank would capture a half-drawn (black) primary. GL always
-        // draws+swaps (keeping the last good frame on screen); GDI only repaints
-        // the window when a new frame is signalled.
+        // on vblank would capture a half-drawn (black) primary. Each backend
+        // draws its last good frame when no new one is signalled; GDI only
+        // repaints the window when a new frame is signalled.
         let mut dirty = crate::state::take_dirty();
         // Force an upload when the primary surface size changes (e.g. the game
-        // recreates it after the loading screen). Without this the GL texture
+        // recreates it after the loading screen). Without this the texture
         // would be the wrong size and the screen would freeze on the last good
         // frame even if the game keeps rendering.
         if let Some(ref buffers) = primary {
@@ -189,17 +255,20 @@ fn render_thread() {
         if let Some(ref buffers) = primary {
             if !PRESENT_LOGGED.swap(true, Ordering::Relaxed) {
                 crate::dd_log!(
-                    "first present: {}x{} bpp={} use_gl={}",
+                    "first present: {}x{} bpp={}",
                     buffers.width,
                     buffers.height,
-                    buffers.bpp,
-                    ogl.is_some()
+                    buffers.bpp
                 );
             }
-            if let Some(ref mut gl) = ogl {
-                gl.present(buffers, dirty);
-            } else if dirty {
-                gdi::present(buffers);
+            match &mut backend {
+                Backend::D3D9(d) => d.present(buffers, dirty),
+                Backend::GL(g) => g.present(buffers, dirty),
+                Backend::GDI => {
+                    if dirty {
+                        gdi::present(buffers);
+                    }
+                }
             }
         } else if !NO_PRIMARY_LOGGED.swap(true, Ordering::Relaxed) {
             crate::dd_log!("render loop tick: primary surface still not set");
@@ -232,7 +301,9 @@ fn render_thread() {
         start = counter_start();
     }
 
-    if let Some(gl) = ogl {
-        gl.release();
+    match backend {
+        Backend::D3D9(d) => d.release(),
+        Backend::GL(g) => g.release(),
+        Backend::GDI => {}
     }
 }

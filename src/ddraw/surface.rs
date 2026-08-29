@@ -55,9 +55,15 @@ fn fill_pixel_format(pf: &mut DDPIXELFORMAT, bpp: i32) {
     pf.Anonymous1.dwRGBBitCount = bpp as u32;
     match bpp {
         16 => {
-            pf.Anonymous2.dwRBitMask = 0xF800;
-            pf.Anonymous3.dwGBitMask = 0x07E0;
-            pf.Anonymous4.dwBBitMask = 0x001F;
+            if crate::state::RGB555.load(std::sync::atomic::Ordering::Relaxed) {
+                pf.Anonymous2.dwRBitMask = 0x7C00;
+                pf.Anonymous3.dwGBitMask = 0x03E0;
+                pf.Anonymous4.dwBBitMask = 0x001F;
+            } else {
+                pf.Anonymous2.dwRBitMask = 0xF800;
+                pf.Anonymous3.dwGBitMask = 0x07E0;
+                pf.Anonymous4.dwBBitMask = 0x001F;
+            }
         }
         _ => {}
     }
@@ -92,7 +98,14 @@ unsafe fn make_buffers(hdc: HDC, width: i32, height: i32, bpp: i32) -> SurfaceBu
     let bmh_ptr = buf.as_mut_ptr() as *mut BITMAPINFOHEADER;
     *bmh_ptr = bmh;
 
-    let masks: [u32; 3] = [0xF800, 0x07E0, 0x001F];
+    let masks: [u32; 3] = if bpp == 32 {
+        // 32-bit BGRX (matches GL_BGRA upload order).
+        [0x00FF0000, 0x0000FF00, 0x000000FF]
+    } else if crate::state::RGB555.load(std::sync::atomic::Ordering::Relaxed) {
+        [0x7C00, 0x03E0, 0x001F]
+    } else {
+        [0xF800, 0x07E0, 0x001F]
+    };
     let mask_ptr = buf.as_mut_ptr().add(header_size) as *mut u32;
     std::ptr::copy_nonoverlapping(masks.as_ptr(), mask_ptr, 3);
 

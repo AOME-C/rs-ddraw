@@ -12,6 +12,7 @@ use windows::core::PCSTR;
 use crate::state::{state, SurfaceBuffers};
 
 const GL_UNSIGNED_SHORT_5_6_5: u32 = 33635;
+const GL_UNSIGNED_SHORT_1_5_5_5_REV: u32 = 32822;
 const GL_TEXTURE_MAX_LEVEL: u32 = 33117;
 const GL_BGRA: u32 = 0x80E1;
 
@@ -69,6 +70,11 @@ impl OglState {
             // cause glTexImage2D to allocate no storage, after which the
             // glTexSubImage2D write faults the GPU (TDR / driver reset). Use the
             // legacy-safe internal formats GL_RGB / GL_RGBA.
+            let t16 = if crate::state::RGB555.load(std::sync::atomic::Ordering::Relaxed) {
+                GL_UNSIGNED_SHORT_1_5_5_5_REV
+            } else {
+                GL_UNSIGNED_SHORT_5_6_5
+            };
             glTexImage2D(
                 GL_TEXTURE_2D,
                 0,
@@ -77,7 +83,7 @@ impl OglState {
                 tex_h,
                 0,
                 GL_RGB,
-                GL_UNSIGNED_SHORT_5_6_5,
+                t16,
                 std::ptr::null(),
             );
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST as i32);
@@ -135,8 +141,11 @@ impl OglState {
             glGenTextures(1, &mut self.tex);
             glBindTexture(GL_TEXTURE_2D, self.tex);
 
+            let rgb555 = crate::state::RGB555.load(std::sync::atomic::Ordering::Relaxed);
             let (internal, format, type_) = if bpp == 32 {
                 (GL_RGBA as i32, GL_BGRA, GL_UNSIGNED_BYTE)
+            } else if rgb555 {
+                (GL_RGB as i32, GL_RGB, GL_UNSIGNED_SHORT_1_5_5_5_REV)
             } else {
                 (GL_RGB as i32, GL_RGB, GL_UNSIGNED_SHORT_5_6_5)
             };
@@ -204,7 +213,7 @@ impl OglState {
             let cw = rc.right - rc.left;
             let ch = rc.bottom - rc.top;
 
-            let (vl, vt, vr, vb, scale_w, scale_h, stretched) = {
+            let (vl, vt, vr, vb, render_h) = {
                 let st = state().lock().unwrap();
                 let vp = st.render.viewport;
                 if vp.right > vp.left && vp.bottom > vp.top {
@@ -213,25 +222,24 @@ impl OglState {
                         vp.top,
                         vp.right,
                         vp.bottom,
-                        st.render.scale_w,
-                        st.render.scale_h,
-                        st.render.stretched,
+                        st.render.height,
                     )
                 } else if cw > 0 && ch > 0 {
-                    (0, 0, cw, ch, 1.0f32, 1.0f32, false)
+                    (0, 0, cw, ch, ch)
                 } else {
-                    (0, 0, 1, 1, 1.0f32, 1.0f32, false)
+                    (0, 0, 1, 1, 1)
                 }
             };
 
             if vr > vl && vb > vt {
-                glViewport(vl, vt, vr - vl, vb - vt);
+                // OpenGL's glViewport origin is bottom-left, but
+                // `st.render.viewport` is stored in top-left (Windows)
+                // coordinates. Flip Y so letterboxing / aspect-ratio offsets land
+                // in the right place.
+                let gl_y = render_h - vt - (vb - vt);
+                glViewport(vl, gl_y, vr - vl, vb - vt);
             } else if cw > 0 && ch > 0 {
                 glViewport(0, 0, cw, ch);
-            }
-
-            if stretched {
-                glScalef(scale_w, scale_h, 1.0);
             }
 
             glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -243,8 +251,11 @@ impl OglState {
             glPixelStorei(GL_UNPACK_ROW_LENGTH, buffers.pitch / ((buffers.bpp / 8).max(1)));
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
+            let rgb555 = crate::state::RGB555.load(std::sync::atomic::Ordering::Relaxed);
             let (tex_format, tex_type) = if buffers.bpp == 32 {
                 (GL_BGRA, GL_UNSIGNED_BYTE)
+            } else if rgb555 {
+                (GL_RGB, GL_UNSIGNED_SHORT_1_5_5_5_REV)
             } else {
                 (GL_RGB, GL_UNSIGNED_SHORT_5_6_5)
             };
@@ -304,13 +315,16 @@ impl OglState {
 
             let _ = SwapBuffers(self.hdc);
 
+            // Release the GL context before issuing GDI calls. Many drivers do
+            // not display (or may corrupt) GDI output on a DC whose GL context
+            // is still current.
+            let _ = wglMakeCurrent(self.hdc, HGLRC(std::ptr::null_mut()));
+
             if draw_fps {
                 crate::render::draw_fps(self.hdc, fps);
             }
 
             crate::render::composite_child_windows(hwnd, buffers.hdc);
-
-            let _ = wglMakeCurrent(self.hdc, HGLRC(std::ptr::null_mut()));
         }
     }
 

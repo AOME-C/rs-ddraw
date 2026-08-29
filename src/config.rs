@@ -18,7 +18,8 @@ use windows::Win32::System::WindowsProgramming::{
 };
 
 use crate::state::{
-    state, DMDFO_CENTER, DMDFO_DEFAULT, DMDFO_STRETCH, RENDERER_GDI, RENDERER_OPENGL,
+    state, DMDFO_CENTER, DMDFO_DEFAULT, DMDFO_STRETCH, RENDERER_D3D9, RENDERER_GDI,
+    RENDERER_OPENGL,
 };
 
 const SETTINGS_SECTION: &str = "ddraw";
@@ -155,6 +156,8 @@ pub unsafe fn load() {
 
     s.edge_timeout_ms = get_int("MonitorEdgeTimer", s.edge_timeout_ms);
 
+    crate::state::RGB555.store(get_bool("rgb555", false), std::sync::atomic::Ordering::Relaxed);
+
     s.gl_fence_sync = get_bool("GlFenceSync", s.gl_fence_sync);
 
     s.fixed_output = get_fixed_output("FixedOutput", "stretch");
@@ -204,14 +207,16 @@ fn get_renderer(key: &str, default: &str) -> (i32, bool) {
         (RENDERER_OPENGL, false)
     } else if eq_ignore(value, "gdi") {
         (RENDERER_GDI, false)
+    } else if eq_ignore(value, "d3d9") {
+        (RENDERER_D3D9, false)
     } else if eq_ignore(value, "auto") {
         match default {
+            "d3d9" => (RENDERER_D3D9, true),
             "opengl" => (RENDERER_OPENGL, true),
-            "gdi" => (RENDERER_GDI, true),
-            _ => (RENDERER_OPENGL, true),
+            _ => (RENDERER_D3D9, true),
         }
     } else {
-        (RENDERER_GDI, false)
+        (RENDERER_D3D9, false)
     }
 }
 

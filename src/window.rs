@@ -96,15 +96,14 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         WM_KEYDOWN => {
             handle_hotkeys(hwnd, wparam.0 as i32);
         }
-        WM_TIMER => {
-            if wparam.0 as usize == TIMER_FIX_WINDOWPOS {
+        WM_TIMER
+            if wparam.0 == TIMER_FIX_WINDOWPOS => {
                 let (gw, gh) = {
                     let st = state().lock().unwrap();
                     (st.width, st.height)
                 };
                 set_window_size(gw, gh);
             }
-        }
         _ => {}
     }
 
@@ -132,7 +131,6 @@ unsafe fn handle_hotkeys(_hwnd: HWND, key: i32) {
             VK_TAB => {
                 drop(st);
                 mouse_unlock(true);
-                return;
             }
             VK_END => {
                 if st.auto_renderer {
@@ -150,7 +148,6 @@ unsafe fn handle_hotkeys(_hwnd: HWND, key: i32) {
                     // Force the running renderer to re-init.
                     let mut s = state().lock().unwrap();
                     s.render.invalidate = true;
-                    return;
                 }
             }
             VK_PRIOR => {
@@ -174,12 +171,10 @@ unsafe fn handle_hotkeys(_hwnd: HWND, key: i32) {
         } else {
             mouse_lock();
         }
-        return;
-    } else if rctrl {
-        if key == 'R' as i32 {
+    } else if rctrl
+        && key == 'R' as i32 {
             st.draw_fps = !st.draw_fps;
         }
-    }
 }
 
 /// Compute the render viewport (MaintainAspectRatio / Windowboxing /

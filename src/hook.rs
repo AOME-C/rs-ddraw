@@ -46,7 +46,7 @@ fn ieq(name: *const u8, target: &[u8]) -> bool {
             if c == 0 {
                 return false;
             }
-            if c.to_ascii_lowercase() != t.to_ascii_lowercase() {
+            if !c.eq_ignore_ascii_case(&t) {
                 return false;
             }
             i += 1;
@@ -156,7 +156,7 @@ unsafe extern "system" fn fake_set_window_pos(
     if let Some(f) = REAL_SETPOS {
         f(hwnd, hwnd_insert_after, x, y, cx, cy, flags);
     }
-    if (flags & SWP_NOSIZE.0 as u32) == 0 {
+    if (flags & SWP_NOSIZE.0) == 0 {
         let (our, gw, gh) = {
             let st = state().lock().unwrap();
             (st.hwnd, st.width, st.height)
@@ -213,11 +213,11 @@ pub(crate) fn init() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| unsafe {
         if let Ok(hmod) = GetModuleHandleA(None) {
-            let user32 = GetModuleHandleA(windows::core::PCSTR(b"user32.dll\0".as_ptr()));
+            let user32 = GetModuleHandleA(windows::core::PCSTR(c"user32.dll".as_ptr().cast()));
             if let Ok(user32) = user32 {
-                REAL_SETPOS = to_fn(GetProcAddress(user32, windows::core::PCSTR(b"SetWindowPos\0".as_ptr())));
-                REAL_GETCURSORPOS = to_fn(GetProcAddress(user32, windows::core::PCSTR(b"GetCursorPos\0".as_ptr())));
-                REAL_MOVEWINDOW = to_fn(GetProcAddress(user32, windows::core::PCSTR(b"MoveWindow\0".as_ptr())));
+                REAL_SETPOS = to_fn(GetProcAddress(user32, windows::core::PCSTR(c"SetWindowPos".as_ptr().cast())));
+                REAL_GETCURSORPOS = to_fn(GetProcAddress(user32, windows::core::PCSTR(c"GetCursorPos".as_ptr().cast())));
+                REAL_MOVEWINDOW = to_fn(GetProcAddress(user32, windows::core::PCSTR(c"MoveWindow".as_ptr().cast())));
             }
             hook_iat(hmod, b"user32.dll\0", b"SetWindowPos\0", fake_set_window_pos as usize);
             hook_iat(hmod, b"user32.dll\0", b"MoveWindow\0", fake_move_window as usize);

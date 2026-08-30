@@ -49,8 +49,8 @@ pub unsafe extern "system" fn DllMain(h_module: HMODULE, dw_reason: u32, _lp_res
 
 /// Make the process DPI aware so window coordinates match device pixels.
 unsafe fn set_dpi_aware() {
-    if let Ok(user32) = GetModuleHandleA(PCSTR::from_raw(b"user32.dll\0".as_ptr())) {
-        let name = PCSTR::from_raw(b"SetProcessDPIAware\0".as_ptr());
+    if let Ok(user32) = GetModuleHandleA(PCSTR::from_raw(c"user32.dll".as_ptr().cast())) {
+        let name = PCSTR::from_raw(c"SetProcessDPIAware".as_ptr().cast());
         if let Some(proc) = GetProcAddress(user32, name) {
             let f: extern "system" fn() -> BOOL = std::mem::transmute(proc);
             let _ = f();

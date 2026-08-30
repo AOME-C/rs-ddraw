@@ -237,9 +237,9 @@ impl D3D9State {
                             } else {
                                 (((v >> 11) & 0x1F) as u32, ((v >> 5) & 0x3F) as u32, (v & 0x1F) as u32)
                             };
-                            let r8 = (r * 255 / 31) as u32;
-                            let g8 = if rgb555 { (g * 255 / 31) as u32 } else { (g * 255 / 63) as u32 };
-                            let b8 = (b * 255 / 31) as u32;
+                            let r8 = r * 255 / 31;
+                            let g8 = if rgb555 { g * 255 / 31 } else { g * 255 / 63 };
+                            let b8 = b * 255 / 31;
                             b8 | (g8 << 8) | (r8 << 16) | 0xFF00_0000
                         }
                         _ => 0xFF00_0000,

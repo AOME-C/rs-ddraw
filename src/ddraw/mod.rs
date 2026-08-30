@@ -77,9 +77,9 @@ fn create_palette(dwflags: u32, lpddcolorarray: *mut PALETTEENTRY) -> Result<IDi
     let mut entries = [[0u8; 4]; 256];
     if !lpddcolorarray.is_null() {
         unsafe {
-            for i in 0..256 {
+            for (i, e) in entries.iter_mut().enumerate() {
                 let pe = *lpddcolorarray.add(i);
-                entries[i] = [pe.peBlue, pe.peGreen, pe.peRed, pe.peFlags];
+                *e = [pe.peBlue, pe.peGreen, pe.peRed, pe.peFlags];
             }
         }
     }
@@ -151,17 +151,18 @@ fn enum_display_modes(
         while unsafe { EnumDisplaySettingsA(None, ENUM_DISPLAY_SETTINGS_MODE(i), &mut dm).as_bool() } {
             let w = dm.dmPelsWidth;
             let h = dm.dmPelsHeight;
-            if let Some((fw, fh)) = filter_res {
-                if w != fw || h != fh {
+            if let Some((fw, fh)) = filter_res
+                && (w != fw || h != fh) {
                     i += 1;
                     continue;
                 }
-            }
-            let mut desc = DDSURFACEDESC::default();
-            desc.dwSize = std::mem::size_of::<DDSURFACEDESC>() as u32;
-            desc.dwFlags = (DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT | DDSD_REFRESHRATE) as u32;
-            desc.dwWidth = w;
-            desc.dwHeight = h;
+            let mut desc = DDSURFACEDESC {
+                dwSize: std::mem::size_of::<DDSURFACEDESC>() as u32,
+                dwFlags: (DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT | DDSD_REFRESHRATE) as u32,
+                dwWidth: w,
+                dwHeight: h,
+                ..Default::default()
+            };
             desc.Anonymous2.dwRefreshRate = 60;
             let bytes_pp = (bpp / 8).max(1);
             desc.Anonymous1.lPitch = (w * bytes_pp) as i32;
@@ -219,7 +220,7 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
             let st = state().lock().unwrap();
             (st.width, st.height, st.bpp)
         } else {
-            let w = if desc.dwWidth > 0 { ((desc.dwWidth + 1) / 2 * 2) as i32 } else { state().lock().unwrap().width };
+            let w = if desc.dwWidth > 0 { (desc.dwWidth.div_ceil(2) * 2) as i32 } else { state().lock().unwrap().width };
             let h = if desc.dwHeight > 0 { desc.dwHeight as i32 } else { state().lock().unwrap().height };
             let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 {
                 unsafe { desc.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 }
@@ -281,7 +282,7 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
             (*desc).dwWidth = st.width as u32;
             (*desc).dwHeight = st.height as u32;
             let bytes_pp = (st.bpp / 8).max(1);
-            (*desc).Anonymous1.lPitch = st.width * bytes_pp as i32;
+            (*desc).Anonymous1.lPitch = st.width * bytes_pp;
             fill_pixel_format(&mut (*desc).ddpfPixelFormat, st.bpp);
         }
         Ok(())
@@ -565,14 +566,14 @@ impl IDirectDraw4_Impl for DirectDrawImpl_Impl {
             let st = state().lock().unwrap();
             (st.width, st.height, st.bpp)
         } else {
-            let w = if desc.dwWidth > 0 { ((desc.dwWidth + 1) / 2 * 2) as i32 } else { state().lock().unwrap().width };
+            let w = if desc.dwWidth > 0 { (desc.dwWidth.div_ceil(2) * 2) as i32 } else { state().lock().unwrap().width };
             let h = if desc.dwHeight > 0 { desc.dwHeight as i32 } else { state().lock().unwrap().height };
             let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 {
                 unsafe { desc.Anonymous5.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 }
             } else {
                 16
             };
-            (w as i32, h, bpp)
+            (w, h, bpp)
         };
         let bbc = if desc.dwFlags & DDSD_BACKBUFFERCOUNT as u32 != 0 {
             unsafe { desc.Anonymous2.dwBackBufferCount }
@@ -629,7 +630,7 @@ impl IDirectDraw4_Impl for DirectDrawImpl_Impl {
             (*desc).dwWidth = st.width as u32;
             (*desc).dwHeight = st.height as u32;
             let bytes_pp = (st.bpp / 8).max(1);
-            (*desc).Anonymous1.lPitch = st.width * bytes_pp as i32;
+            (*desc).Anonymous1.lPitch = st.width * bytes_pp;
             fill_pixel_format(&mut (*desc).Anonymous5.ddpfPixelFormat, st.bpp);
         }
         Ok(())
@@ -713,14 +714,14 @@ impl IDirectDraw7_Impl for DirectDrawImpl_Impl {
             let st = state().lock().unwrap();
             (st.width, st.height, st.bpp)
         } else {
-            let w = if desc.dwWidth > 0 { ((desc.dwWidth + 1) / 2 * 2) as i32 } else { state().lock().unwrap().width };
+            let w = if desc.dwWidth > 0 { (desc.dwWidth.div_ceil(2) * 2) as i32 } else { state().lock().unwrap().width };
             let h = if desc.dwHeight > 0 { desc.dwHeight as i32 } else { state().lock().unwrap().height };
             let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 {
                 unsafe { desc.Anonymous5.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 }
             } else {
                 16
             };
-            (w as i32, h, bpp)
+            (w, h, bpp)
         };
         let bbc = if desc.dwFlags & DDSD_BACKBUFFERCOUNT as u32 != 0 {
             unsafe { desc.Anonymous2.dwBackBufferCount }
@@ -777,7 +778,7 @@ impl IDirectDraw7_Impl for DirectDrawImpl_Impl {
             (*desc).dwWidth = st.width as u32;
             (*desc).dwHeight = st.height as u32;
             let bytes_pp = (st.bpp / 8).max(1);
-            (*desc).Anonymous1.lPitch = st.width * bytes_pp as i32;
+            (*desc).Anonymous1.lPitch = st.width * bytes_pp;
             fill_pixel_format(&mut (*desc).Anonymous5.ddpfPixelFormat, st.bpp);
         }
         Ok(())

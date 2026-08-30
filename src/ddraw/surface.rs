@@ -47,19 +47,16 @@ fn fill_pixel_format(pf: &mut DDPIXELFORMAT, bpp: i32) {
     pf.dwSize = std::mem::size_of::<DDPIXELFORMAT>() as u32;
     pf.dwFlags = pixel_type(bpp);
     pf.Anonymous1.dwRGBBitCount = bpp as u32;
-    match bpp {
-        16 => {
-            if crate::state::RGB555.load(std::sync::atomic::Ordering::Relaxed) {
-                pf.Anonymous2.dwRBitMask = 0x7C00;
-                pf.Anonymous3.dwGBitMask = 0x03E0;
-                pf.Anonymous4.dwBBitMask = 0x001F;
-            } else {
-                pf.Anonymous2.dwRBitMask = 0xF800;
-                pf.Anonymous3.dwGBitMask = 0x07E0;
-                pf.Anonymous4.dwBBitMask = 0x001F;
-            }
+    if bpp == 16 {
+        if crate::state::RGB555.load(std::sync::atomic::Ordering::Relaxed) {
+            pf.Anonymous2.dwRBitMask = 0x7C00;
+            pf.Anonymous3.dwGBitMask = 0x03E0;
+            pf.Anonymous4.dwBBitMask = 0x001F;
+        } else {
+            pf.Anonymous2.dwRBitMask = 0xF800;
+            pf.Anonymous3.dwGBitMask = 0x07E0;
+            pf.Anonymous4.dwBBitMask = 0x001F;
         }
-        _ => {}
     }
 }
 
@@ -186,7 +183,7 @@ impl SurfaceImpl {
             self.fill_desc2(&mut *desc, self.buffers.surface);
             if !rect.is_null() {
                 let r = &*rect;
-                let bytes_pp = (self.bpp / 8).max(1) as i32;
+                let bytes_pp = (self.bpp / 8).max(1);
                 let offset = (r.top * self.pitch) + (r.left * bytes_pp);
                 (*desc).lpSurface = self.buffers.surface.add(offset as usize) as *mut core::ffi::c_void;
                 (*desc).dwWidth = (r.right - r.left) as u32;
@@ -260,14 +257,13 @@ impl SurfaceImpl {
             return Err(E_INVALIDARG.into());
         }
         let requested = unsafe { (*caps).dwCaps };
-        if (requested & DDSCAPS_BACKBUFFER as u32) != 0 {
-            if let Some(ref bb) = self.backbuffer {
+        if (requested & DDSCAPS_BACKBUFFER as u32) != 0
+            && let Some(ref bb) = self.backbuffer {
                 let mut s = SurfaceImpl::from_buffers(bb.clone(), self.width, self.height, self.bpp, false);
                 s.caps = (DDSCAPS_BACKBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY) as u32;
                 let surface: IDirectDrawSurface = s.into();
                 return surface.cast::<IDirectDrawSurface7>();
             }
-        }
         Err(dderr(DXERR_GENERIC))
     }
 
@@ -276,14 +272,13 @@ impl SurfaceImpl {
             return Err(E_INVALIDARG.into());
         }
         let requested = unsafe { (*caps).dwCaps };
-        if (requested & DDSCAPS_BACKBUFFER as u32) != 0 {
-            if let Some(ref bb) = self.backbuffer {
+        if (requested & DDSCAPS_BACKBUFFER as u32) != 0
+            && let Some(ref bb) = self.backbuffer {
                 let mut s = SurfaceImpl::from_buffers(bb.clone(), self.width, self.height, self.bpp, false);
                 s.caps = (DDSCAPS_BACKBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY) as u32;
                 let surface: IDirectDrawSurface = s.into();
                 return surface.cast::<IDirectDrawSurface7>();
             }
-        }
         Err(dderr(DXERR_GENERIC))
     }
 

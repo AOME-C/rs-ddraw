@@ -1,7 +1,7 @@
-/// Keyboard input handling.
-///
-/// Processes hotkeys: Alt+Enter (fullscreen toggle), Ctrl+Tab (unlock cursor),
-/// Alt+PageDown (maximize), etc.
+//! Keyboard input handling.
+//!
+//! Processes hotkeys: Alt+Enter (fullscreen toggle), Ctrl+Tab (unlock cursor),
+//! Alt+PageDown (maximize), etc.
 
 /// Initialize keyboard hook.
 pub(crate) fn init() {

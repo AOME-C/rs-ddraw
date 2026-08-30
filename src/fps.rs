@@ -1,7 +1,7 @@
-/// FPS limiter.
-///
-/// Controls rendering frame rate and game tick speed to prevent
-/// old games from running too fast on modern hardware.
+//! FPS limiter.
+//!
+//! Controls rendering frame rate and game tick speed to prevent
+//! old games from running too fast on modern hardware.
 
 pub(crate) struct FpsLimiter {
     pub target_fps: i32,

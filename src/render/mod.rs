@@ -119,7 +119,7 @@ fn render_thread() {
     enum Backend {
         D3D9(d3d9::D3D9State),
         GL(opengl::OglState),
-        GDI,
+        Gdi,
     }
 
     let (hwnd, hdc, w, h, renderer, auto) = {
@@ -142,7 +142,7 @@ fn render_thread() {
             let b = match r {
                 RENDERER_D3D9 => d3d9::D3D9State::new(hwnd, w, h).map(Backend::D3D9),
                 RENDERER_OPENGL => opengl::OglState::new(hdc, w, h).map(Backend::GL),
-                RENDERER_GDI => Some(Backend::GDI),
+                RENDERER_GDI => Some(Backend::Gdi),
                 _ => None,
             };
             match b {
@@ -175,7 +175,7 @@ fn render_thread() {
             state().lock().unwrap().renderer = chosen;
             bk
         } else {
-            Backend::GDI
+            Backend::Gdi
         }
     };
 
@@ -184,7 +184,7 @@ fn render_thread() {
         match backend {
             Backend::D3D9(_) => "d3d9",
             Backend::GL(_) => "opengl",
-            Backend::GDI => "gdi",
+            Backend::Gdi => "gdi",
         },
         { state().lock().unwrap().target_fps }
     );
@@ -201,7 +201,7 @@ fn render_thread() {
         let primary: Option<std::sync::Arc<SurfaceBuffers>> = { state().lock().unwrap().primary.clone() };
         // Present only when the game has produced a *complete* frame. cnc-ddraw
         // uploads on `surface_updated` (raised on Blt/Flip/Unlock/ReleaseDC of
-        // the primary), i.e. *after* the draw finishes — never on
+        // the primary), i.e. *after* the draw finishes, never on
         // WaitForVerticalBlank, which many games call *before* drawing. Uploading
         // on vblank would capture a half-drawn (black) primary. Each backend
         // draws its last good frame when no new one is signalled; GDI only
@@ -211,13 +211,12 @@ fn render_thread() {
         // recreates it after the loading screen). Without this the texture
         // would be the wrong size and the screen would freeze on the last good
         // frame even if the game keeps rendering.
-        if let Some(ref buffers) = primary {
-            if buffers.width != last_w || buffers.height != last_h {
+        if let Some(ref buffers) = primary
+            && (buffers.width != last_w || buffers.height != last_h) {
                 dirty = true;
                 last_w = buffers.width;
                 last_h = buffers.height;
             }
-        }
         if let Some(ref buffers) = primary {
             if !PRESENT_LOGGED.swap(true, Ordering::Relaxed) {
                 crate::dd_log!("first present: {}x{} bpp={}", buffers.width, buffers.height, buffers.bpp);
@@ -225,7 +224,7 @@ fn render_thread() {
             match &mut backend {
                 Backend::D3D9(d) => d.present(buffers, dirty),
                 Backend::GL(g) => g.present(buffers, dirty),
-                Backend::GDI => {
+                Backend::Gdi => {
                     if dirty {
                         gdi::present(buffers);
                     }
@@ -261,6 +260,6 @@ fn render_thread() {
     match backend {
         Backend::D3D9(d) => d.release(),
         Backend::GL(g) => g.release(),
-        Backend::GDI => {}
+        Backend::Gdi => {}
     }
 }

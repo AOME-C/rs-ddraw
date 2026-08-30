@@ -1,7 +1,7 @@
-/// Mouse input handling.
-///
-/// Handles cursor locking, sensitivity scaling, and coordinate
-/// transformation between game and window space.
+//! Mouse input handling.
+//!
+//! Handles cursor locking, sensitivity scaling, and coordinate
+//! transformation between game and window space.
 
 /// Lock the cursor to the game window.
 pub(crate) fn lock() {

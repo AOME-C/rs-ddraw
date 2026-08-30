@@ -344,13 +344,27 @@ impl D3D9State {
             if let Some(tex) = self.tex.as_ref() {
                 let base: &IDirect3DBaseTexture9 = tex;
                 let _ = self.device.SetTexture(0, Some(base));
-                // Triangle strip quad in NDC, uv 0..1 (texture is exact size).
+                // Point filtering every frame for crisp fonts/pixels (sampler
+                // state must not be left to the driver's default, which is
+                // (bi)linear and blurs text when the surface is scaled).
+                let _ = self.device.SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT.0 as u32);
+                let _ = self.device.SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT.0 as u32);
+                // Triangle strip quad in NDC. Offset UVs by half a texel so each
+                // destination pixel samples a texel *center* (D3D9 texel centers
+                // are at (x+0.5)/w) -- otherwise a 1:1 blit samples texel borders
+                // and the game text/UI looks soft.
+                let tw = self.tex_w.max(1) as f32;
+                let th = self.tex_h.max(1) as f32;
+                let u0 = 0.5 / tw;
+                let v0 = 0.5 / th;
+                let u1 = (tw - 0.5) / tw;
+                let v1 = (th - 0.5) / th;
                 #[rustfmt::skip]
                 let verts: [f32; 20] = [
-                    -1.0,  1.0, 0.0,  0.0, 0.0,
-                     1.0,  1.0, 0.0,  1.0, 0.0,
-                    -1.0, -1.0, 0.0,  0.0, 1.0,
-                     1.0, -1.0, 0.0,  1.0, 1.0,
+                    -1.0,  1.0, 0.0,  u0, v0,
+                     1.0,  1.0, 0.0,  u1, v0,
+                    -1.0, -1.0, 0.0,  u0, v1,
+                     1.0, -1.0, 0.0,  u1, v1,
                 ];
                 let _ = self.device.SetFVF(D3DFVF_XYZ | D3DFVF_TEX1);
                 let _ = self.device.DrawPrimitiveUP(

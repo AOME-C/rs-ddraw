@@ -152,10 +152,11 @@ fn enum_display_modes(
             let w = dm.dmPelsWidth;
             let h = dm.dmPelsHeight;
             if let Some((fw, fh)) = filter_res
-                && (w != fw || h != fh) {
-                    i += 1;
-                    continue;
-                }
+                && (w != fw || h != fh)
+            {
+                i += 1;
+                continue;
+            }
             let mut desc = DDSURFACEDESC {
                 dwSize: std::mem::size_of::<DDSURFACEDESC>() as u32,
                 dwFlags: (DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT | DDSD_REFRESHRATE) as u32,
@@ -220,7 +221,8 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
             let st = state().lock().unwrap();
             (st.width, st.height, st.bpp)
         } else {
-            let w = if desc.dwWidth > 0 { (desc.dwWidth.div_ceil(2) * 2) as i32 } else { state().lock().unwrap().width };
+            let w =
+                if desc.dwWidth > 0 { (desc.dwWidth.div_ceil(2) * 2) as i32 } else { state().lock().unwrap().width };
             let h = if desc.dwHeight > 0 { desc.dwHeight as i32 } else { state().lock().unwrap().height };
             let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 {
                 unsafe { desc.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 }
@@ -566,7 +568,8 @@ impl IDirectDraw4_Impl for DirectDrawImpl_Impl {
             let st = state().lock().unwrap();
             (st.width, st.height, st.bpp)
         } else {
-            let w = if desc.dwWidth > 0 { (desc.dwWidth.div_ceil(2) * 2) as i32 } else { state().lock().unwrap().width };
+            let w =
+                if desc.dwWidth > 0 { (desc.dwWidth.div_ceil(2) * 2) as i32 } else { state().lock().unwrap().width };
             let h = if desc.dwHeight > 0 { desc.dwHeight as i32 } else { state().lock().unwrap().height };
             let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 {
                 unsafe { desc.Anonymous5.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 }
@@ -714,7 +717,8 @@ impl IDirectDraw7_Impl for DirectDrawImpl_Impl {
             let st = state().lock().unwrap();
             (st.width, st.height, st.bpp)
         } else {
-            let w = if desc.dwWidth > 0 { (desc.dwWidth.div_ceil(2) * 2) as i32 } else { state().lock().unwrap().width };
+            let w =
+                if desc.dwWidth > 0 { (desc.dwWidth.div_ceil(2) * 2) as i32 } else { state().lock().unwrap().width };
             let h = if desc.dwHeight > 0 { desc.dwHeight as i32 } else { state().lock().unwrap().height };
             let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 {
                 unsafe { desc.Anonymous5.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 }

@@ -216,7 +216,8 @@ pub(crate) fn init() {
             let user32 = GetModuleHandleA(windows::core::PCSTR(c"user32.dll".as_ptr().cast()));
             if let Ok(user32) = user32 {
                 REAL_SETPOS = to_fn(GetProcAddress(user32, windows::core::PCSTR(c"SetWindowPos".as_ptr().cast())));
-                REAL_GETCURSORPOS = to_fn(GetProcAddress(user32, windows::core::PCSTR(c"GetCursorPos".as_ptr().cast())));
+                REAL_GETCURSORPOS =
+                    to_fn(GetProcAddress(user32, windows::core::PCSTR(c"GetCursorPos".as_ptr().cast())));
                 REAL_MOVEWINDOW = to_fn(GetProcAddress(user32, windows::core::PCSTR(c"MoveWindow".as_ptr().cast())));
             }
             hook_iat(hmod, b"user32.dll\0", b"SetWindowPos\0", fake_set_window_pos as usize);

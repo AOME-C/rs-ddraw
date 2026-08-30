@@ -258,12 +258,13 @@ impl SurfaceImpl {
         }
         let requested = unsafe { (*caps).dwCaps };
         if (requested & DDSCAPS_BACKBUFFER as u32) != 0
-            && let Some(ref bb) = self.backbuffer {
-                let mut s = SurfaceImpl::from_buffers(bb.clone(), self.width, self.height, self.bpp, false);
-                s.caps = (DDSCAPS_BACKBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY) as u32;
-                let surface: IDirectDrawSurface = s.into();
-                return surface.cast::<IDirectDrawSurface7>();
-            }
+            && let Some(ref bb) = self.backbuffer
+        {
+            let mut s = SurfaceImpl::from_buffers(bb.clone(), self.width, self.height, self.bpp, false);
+            s.caps = (DDSCAPS_BACKBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY) as u32;
+            let surface: IDirectDrawSurface = s.into();
+            return surface.cast::<IDirectDrawSurface7>();
+        }
         Err(dderr(DXERR_GENERIC))
     }
 
@@ -273,12 +274,13 @@ impl SurfaceImpl {
         }
         let requested = unsafe { (*caps).dwCaps };
         if (requested & DDSCAPS_BACKBUFFER as u32) != 0
-            && let Some(ref bb) = self.backbuffer {
-                let mut s = SurfaceImpl::from_buffers(bb.clone(), self.width, self.height, self.bpp, false);
-                s.caps = (DDSCAPS_BACKBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY) as u32;
-                let surface: IDirectDrawSurface = s.into();
-                return surface.cast::<IDirectDrawSurface7>();
-            }
+            && let Some(ref bb) = self.backbuffer
+        {
+            let mut s = SurfaceImpl::from_buffers(bb.clone(), self.width, self.height, self.bpp, false);
+            s.caps = (DDSCAPS_BACKBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY) as u32;
+            let surface: IDirectDrawSurface = s.into();
+            return surface.cast::<IDirectDrawSurface7>();
+        }
         Err(dderr(DXERR_GENERIC))
     }
 

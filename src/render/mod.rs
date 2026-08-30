@@ -212,11 +212,12 @@ fn render_thread() {
         // would be the wrong size and the screen would freeze on the last good
         // frame even if the game keeps rendering.
         if let Some(ref buffers) = primary
-            && (buffers.width != last_w || buffers.height != last_h) {
-                dirty = true;
-                last_w = buffers.width;
-                last_h = buffers.height;
-            }
+            && (buffers.width != last_w || buffers.height != last_h)
+        {
+            dirty = true;
+            last_w = buffers.width;
+            last_h = buffers.height;
+        }
         if let Some(ref buffers) = primary {
             if !PRESENT_LOGGED.swap(true, Ordering::Relaxed) {
                 crate::dd_log!("first present: {}x{} bpp={}", buffers.width, buffers.height, buffers.bpp);

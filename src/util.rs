@@ -12,9 +12,10 @@ fn pcstr(bytes: &[u8]) -> PCSTR {
 /// Returns true when running under Wine.
 pub unsafe fn is_wine() -> bool {
     if let Ok(dll) = GetModuleHandleA(pcstr(b"ntdll\0"))
-        && !dll.is_invalid() {
-            return GetProcAddress(dll, pcstr(b"wine_get_version\0")).is_some();
-        }
+        && !dll.is_invalid()
+    {
+        return GetProcAddress(dll, pcstr(b"wine_get_version\0")).is_some();
+    }
     false
 }
 
@@ -23,11 +24,13 @@ pub unsafe fn is_windows_xp() -> bool {
     let version = windows::Win32::System::SystemInformation::GetVersion();
     let major = (version & 0x0000_00FF) as u8;
     let minor = ((version & 0x0000_FF00) >> 8) as u8;
-    if major == 5 && minor == 1
+    if major == 5
+        && minor == 1
         && let Ok(dll) = GetModuleHandleA(pcstr(b"ntdll\0"))
-            && !dll.is_invalid() {
-                return GetProcAddress(dll, pcstr(b"wine_get_version\0")).is_none();
-            }
+        && !dll.is_invalid()
+    {
+        return GetProcAddress(dll, pcstr(b"wine_get_version\0")).is_none();
+    }
     false
 }
 

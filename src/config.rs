@@ -143,15 +143,17 @@ pub unsafe fn load() {
 
     // Environment variable overrides (mirrors ts-ddraw's DDRAW_* vars).
     if let Ok(v) = std::env::var("DDRAW_DRAW_FPS")
-        && (v.trim().eq_ignore_ascii_case("yes") || v.trim().eq_ignore_ascii_case("true") || v.trim() == "1") {
-            s.draw_fps = true;
-        }
+        && (v.trim().eq_ignore_ascii_case("yes") || v.trim().eq_ignore_ascii_case("true") || v.trim() == "1")
+    {
+        s.draw_fps = true;
+    }
     if let Ok(v) = std::env::var("DDRAW_TARGET_FPS")
         && let Ok(n) = v.trim().parse::<i32>()
-            && n > 0 {
-                s.target_fps = n as f64;
-                s.target_frame_len = 1000.0 / s.target_fps;
-            }
+        && n > 0
+    {
+        s.target_fps = n as f64;
+        s.target_frame_len = 1000.0 / s.target_fps;
+    }
 }
 
 fn apply_affinity(s: &mut crate::state::DDrawState, single: bool) {

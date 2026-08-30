@@ -22,31 +22,34 @@ fn log_path(h_module: HMODULE) -> std::path::PathBuf {
     let mut buf = [0u8; 1024];
     let len = unsafe { GetModuleFileNameA(Some(h_module), &mut buf) } as usize;
     if len > 0
-        && let Ok(s) = std::str::from_utf8(&buf[..len]) {
-            let mut p = std::path::PathBuf::from(s);
-            p.set_file_name("rs-ddraw.log");
-            return p;
-        }
+        && let Ok(s) = std::str::from_utf8(&buf[..len])
+    {
+        let mut p = std::path::PathBuf::from(s);
+        p.set_file_name("rs-ddraw.log");
+        return p;
+    }
     std::path::PathBuf::from("rs-ddraw.log")
 }
 
 pub fn init(h_module: HMODULE) {
     if let Ok(mut guard) = LOG.lock()
-        && guard.is_none() {
-            let path = log_path(h_module);
-            if let Ok(f) = OpenOptions::new().create(true).write(true).truncate(true).open(&path) {
-                let _ = writeln!(&f, "=== rs-ddraw log started ({}) ===", path.display());
-                *guard = Some(f);
-            }
+        && guard.is_none()
+    {
+        let path = log_path(h_module);
+        if let Ok(f) = OpenOptions::new().create(true).write(true).truncate(true).open(&path) {
+            let _ = writeln!(&f, "=== rs-ddraw log started ({}) ===", path.display());
+            *guard = Some(f);
         }
+    }
 }
 
 pub fn log(msg: &str) {
     if let Ok(mut guard) = LOG.lock()
-        && let Some(ref mut f) = *guard {
-            let _ = writeln!(f, "[{:>9} ms] {}", now_ms(), msg);
-            let _ = f.flush();
-        }
+        && let Some(ref mut f) = *guard
+    {
+        let _ = writeln!(f, "[{:>9} ms] {}", now_ms(), msg);
+        let _ = f.flush();
+    }
 }
 
 #[macro_export]

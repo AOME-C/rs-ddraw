@@ -4,26 +4,25 @@ pub(crate) mod clipper;
 pub(crate) mod palette;
 pub(crate) mod surface;
 
-use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::DirectDraw::*;
 use windows::Win32::Graphics::Gdi::{
-    GetDC, HDC, ChangeDisplaySettingsA, EnumDisplaySettingsA, DEVMODEA, ENUM_CURRENT_SETTINGS,
-    ENUM_DISPLAY_SETTINGS_MODE, CDS_TYPE, PALETTEENTRY,
+    CDS_TYPE, ChangeDisplaySettingsA, DEVMODEA, ENUM_CURRENT_SETTINGS, ENUM_DISPLAY_SETTINGS_MODE,
+    EnumDisplaySettingsA, GetDC, HDC, PALETTEENTRY,
 };
 use windows::Win32::Graphics::OpenGL::{
-    ChoosePixelFormat, PIXELFORMATDESCRIPTOR, PFD_DRAW_TO_WINDOW, PFD_DOUBLEBUFFER, PFD_SUPPORT_OPENGL,
-    PFD_SWAP_EXCHANGE, PFD_TYPE_RGBA, SetPixelFormat,
+    ChoosePixelFormat, PFD_DOUBLEBUFFER, PFD_DRAW_TO_WINDOW, PFD_SUPPORT_OPENGL, PFD_SWAP_EXCHANGE, PFD_TYPE_RGBA,
+    PIXELFORMATDESCRIPTOR, SetPixelFormat,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AdjustWindowRectEx, GetSystemMetrics, SetWindowPos, SM_CXSCREEN, SM_CYSCREEN, HWND_TOP,
-    SWP_SHOWWINDOW,
+    AdjustWindowRectEx, GetSystemMetrics, HWND_TOP, SM_CXSCREEN, SM_CYSCREEN, SWP_SHOWWINDOW, SetWindowPos,
 };
+use windows::core::*;
 
 use self::clipper::ClipperImpl;
 use self::palette::PaletteImpl;
 use self::surface::SurfaceImpl;
-use crate::state::{state, RENDERER_OPENGL};
+use crate::state::{RENDERER_OPENGL, state};
 use crate::util::is_windows_xp;
 use crate::window;
 
@@ -48,15 +47,26 @@ fn fill_pixel_format(pf: &mut DDPIXELFORMAT, bpp: i32) {
 
 fn fill_caps(caps: &mut DDCAPS_DX7) {
     caps.dwSize = std::mem::size_of::<DDCAPS_DX7>() as u32;
-    caps.dwCaps = (DDCAPS_BLT | DDCAPS_PALETTE | DDCAPS_BLTCOLORFILL | DDCAPS_BLTSTRETCH
-        | DDCAPS_CANCLIP | DDCAPS_CANCLIPSTRETCHED | DDCAPS_COLORKEY) as u32;
+    caps.dwCaps = (DDCAPS_BLT
+        | DDCAPS_PALETTE
+        | DDCAPS_BLTCOLORFILL
+        | DDCAPS_BLTSTRETCH
+        | DDCAPS_CANCLIP
+        | DDCAPS_CANCLIPSTRETCHED
+        | DDCAPS_COLORKEY) as u32;
     caps.dwCaps2 = DDCAPS2_NOPAGELOCKREQUIRED as u32;
     caps.dwPalCaps = (DDPCAPS_8BIT | DDPCAPS_PRIMARYSURFACE) as u32;
     caps.dwVidMemTotal = 16 * 1024 * 1024;
     caps.dwVidMemFree = 16 * 1024 * 1024;
-    caps.ddsCaps.dwCaps = (DDSCAPS_BACKBUFFER | DDSCAPS_COMPLEX | DDSCAPS_FLIP
-        | DDSCAPS_FRONTBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_PRIMARYSURFACE
-        | DDSCAPS_VIDEOMEMORY | DDSCAPS_OWNDC | DDSCAPS_LOCALVIDMEM) as u32;
+    caps.ddsCaps.dwCaps = (DDSCAPS_BACKBUFFER
+        | DDSCAPS_COMPLEX
+        | DDSCAPS_FLIP
+        | DDSCAPS_FRONTBUFFER
+        | DDSCAPS_OFFSCREENPLAIN
+        | DDSCAPS_PRIMARYSURFACE
+        | DDSCAPS_VIDEOMEMORY
+        | DDSCAPS_OWNDC
+        | DDSCAPS_LOCALVIDMEM) as u32;
 }
 
 fn create_clipper() -> Result<IDirectDrawClipper> {
@@ -95,11 +105,7 @@ fn create_surface(
         backbuffer_count
     );
     let s = SurfaceImpl::new(hdc, width, height, bpp, is_primary);
-    let s = if is_primary && has_flip && backbuffer_count > 0 {
-        s.with_backbuffer(hdc, width, height, bpp)
-    } else {
-        s
-    };
+    let s = if is_primary && has_flip && backbuffer_count > 0 { s.with_backbuffer(hdc, width, height, bpp) } else { s };
 
     if is_primary {
         let buffers = s.buffers.clone();
@@ -130,8 +136,7 @@ fn enum_display_modes(
     };
     let filter_res = if !filter_desc.is_null() {
         let desc = unsafe { &*filter_desc };
-        if (desc.dwFlags & (DDSD_WIDTH | DDSD_HEIGHT) as u32) == (DDSD_WIDTH | DDSD_HEIGHT) as u32
-        {
+        if (desc.dwFlags & (DDSD_WIDTH | DDSD_HEIGHT) as u32) == (DDSD_WIDTH | DDSD_HEIGHT) as u32 {
             Some((desc.dwWidth, desc.dwHeight))
         } else {
             None
@@ -214,16 +219,8 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
             let st = state().lock().unwrap();
             (st.width, st.height, st.bpp)
         } else {
-            let w = if desc.dwWidth > 0 {
-                ((desc.dwWidth + 1) / 2 * 2) as i32
-            } else {
-                state().lock().unwrap().width
-            };
-            let h = if desc.dwHeight > 0 {
-                desc.dwHeight as i32
-            } else {
-                state().lock().unwrap().height
-            };
+            let w = if desc.dwWidth > 0 { ((desc.dwWidth + 1) / 2 * 2) as i32 } else { state().lock().unwrap().width };
+            let h = if desc.dwHeight > 0 { desc.dwHeight as i32 } else { state().lock().unwrap().height };
             let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 {
                 unsafe { desc.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 }
             } else {
@@ -231,11 +228,7 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
             };
             (w, h, bpp)
         };
-        let bbc = if desc.dwFlags & DDSD_BACKBUFFERCOUNT as u32 != 0 {
-            desc.dwBackBufferCount
-        } else {
-            0
-        };
+        let bbc = if desc.dwFlags & DDSD_BACKBUFFERCOUNT as u32 != 0 { desc.dwBackBufferCount } else { 0 };
         let surface = create_surface(w, h, bpp, is_primary, has_flip, bbc);
         let surface: IDirectDrawSurface = surface.into();
         let _ = lplpddsurface.write(Some(surface));
@@ -382,12 +375,7 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
                 };
                 let x = (st.screen_width / 2) - (rc.right / 2);
                 let y = (st.screen_height / 2) - (rc.bottom / 2);
-                let mut dst = RECT {
-                    left: x,
-                    top: y,
-                    right: rc.right + x,
-                    bottom: rc.bottom + y,
-                };
+                let mut dst = RECT { left: x, top: y, right: rc.right + x, bottom: rc.bottom + y };
                 adjust_window_rect(&mut dst, hwnd);
                 crate::dd_log!("SetCooperativeLevel: windowed SetWindowPos begin");
                 SetWindowPos(
@@ -438,15 +426,10 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
         let interval_ms = {
             let st = crate::state::state().lock().unwrap();
             let fps = st.target_fps;
-            if fps > 0.0 {
-                1000.0 / fps
-            } else {
-                1000.0 / 60.0
-            }
+            if fps > 0.0 { 1000.0 / fps } else { 1000.0 / 60.0 }
         };
         if interval_ms > 0.5 {
-            static LAST: std::sync::OnceLock<std::sync::Mutex<std::time::Instant>> =
-                std::sync::OnceLock::new();
+            static LAST: std::sync::OnceLock<std::sync::Mutex<std::time::Instant>> = std::sync::OnceLock::new();
             let last = LAST.get_or_init(|| std::sync::Mutex::new(std::time::Instant::now()));
             let mut guard = last.lock().unwrap();
             let now = std::time::Instant::now();
@@ -468,19 +451,42 @@ impl IDirectDraw2_Impl for DirectDrawImpl_Impl {
     fn CreateClipper(&self, a: u32, b: OutRef<'_, IDirectDrawClipper>, c: Ref<'_, IUnknown>) -> Result<()> {
         IDirectDraw_Impl::CreateClipper(self, a, b, c)
     }
-    fn CreatePalette(&self, a: u32, b: *mut PALETTEENTRY, c: OutRef<'_, IDirectDrawPalette>, d: Ref<'_, IUnknown>) -> Result<()> {
+    fn CreatePalette(
+        &self,
+        a: u32,
+        b: *mut PALETTEENTRY,
+        c: OutRef<'_, IDirectDrawPalette>,
+        d: Ref<'_, IUnknown>,
+    ) -> Result<()> {
         IDirectDraw_Impl::CreatePalette(self, a, b, c, d)
     }
-    fn CreateSurface(&self, a: *mut DDSURFACEDESC, b: OutRef<'_, IDirectDrawSurface>, c: Ref<'_, IUnknown>) -> Result<()> {
+    fn CreateSurface(
+        &self,
+        a: *mut DDSURFACEDESC,
+        b: OutRef<'_, IDirectDrawSurface>,
+        c: Ref<'_, IUnknown>,
+    ) -> Result<()> {
         IDirectDraw_Impl::CreateSurface(self, a, b, c)
     }
     fn DuplicateSurface(&self, a: Ref<'_, IDirectDrawSurface>) -> Result<IDirectDrawSurface> {
         IDirectDraw_Impl::DuplicateSurface(self, a)
     }
-    fn EnumDisplayModes(&self, a: u32, b: *mut DDSURFACEDESC, c: *mut core::ffi::c_void, d: LPDDENUMMODESCALLBACK) -> Result<()> {
+    fn EnumDisplayModes(
+        &self,
+        a: u32,
+        b: *mut DDSURFACEDESC,
+        c: *mut core::ffi::c_void,
+        d: LPDDENUMMODESCALLBACK,
+    ) -> Result<()> {
         IDirectDraw_Impl::EnumDisplayModes(self, a, b, c, d)
     }
-    fn EnumSurfaces(&self, a: u32, b: *mut DDSURFACEDESC, c: *mut core::ffi::c_void, d: LPDDENUMSURFACESCALLBACK) -> Result<()> {
+    fn EnumSurfaces(
+        &self,
+        a: u32,
+        b: *mut DDSURFACEDESC,
+        c: *mut core::ffi::c_void,
+        d: LPDDENUMSURFACESCALLBACK,
+    ) -> Result<()> {
         IDirectDraw_Impl::EnumSurfaces(self, a, b, c, d)
     }
     fn FlipToGDISurface(&self) -> Result<()> {
@@ -534,10 +540,21 @@ impl IDirectDraw4_Impl for DirectDrawImpl_Impl {
     fn CreateClipper(&self, a: u32, b: OutRef<'_, IDirectDrawClipper>, c: Ref<'_, IUnknown>) -> Result<()> {
         IDirectDraw_Impl::CreateClipper(self, a, b, c)
     }
-    fn CreatePalette(&self, a: u32, b: *mut PALETTEENTRY, c: OutRef<'_, IDirectDrawPalette>, d: Ref<'_, IUnknown>) -> Result<()> {
+    fn CreatePalette(
+        &self,
+        a: u32,
+        b: *mut PALETTEENTRY,
+        c: OutRef<'_, IDirectDrawPalette>,
+        d: Ref<'_, IUnknown>,
+    ) -> Result<()> {
         IDirectDraw_Impl::CreatePalette(self, a, b, c, d)
     }
-    fn CreateSurface(&self, lpddsd: *mut DDSURFACEDESC2, lplpddsurface: OutRef<'_, IDirectDrawSurface4>, _punkouter: Ref<'_, IUnknown>) -> Result<()> {
+    fn CreateSurface(
+        &self,
+        lpddsd: *mut DDSURFACEDESC2,
+        lplpddsurface: OutRef<'_, IDirectDrawSurface4>,
+        _punkouter: Ref<'_, IUnknown>,
+    ) -> Result<()> {
         if lpddsd.is_null() {
             return Err(E_INVALIDARG.into());
         }
@@ -550,10 +567,18 @@ impl IDirectDraw4_Impl for DirectDrawImpl_Impl {
         } else {
             let w = if desc.dwWidth > 0 { ((desc.dwWidth + 1) / 2 * 2) as i32 } else { state().lock().unwrap().width };
             let h = if desc.dwHeight > 0 { desc.dwHeight as i32 } else { state().lock().unwrap().height };
-            let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 { unsafe { desc.Anonymous5.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 } } else { 16 };
+            let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 {
+                unsafe { desc.Anonymous5.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 }
+            } else {
+                16
+            };
             (w as i32, h, bpp)
         };
-        let bbc = if desc.dwFlags & DDSD_BACKBUFFERCOUNT as u32 != 0 { unsafe { desc.Anonymous2.dwBackBufferCount } } else { 0 };
+        let bbc = if desc.dwFlags & DDSD_BACKBUFFERCOUNT as u32 != 0 {
+            unsafe { desc.Anonymous2.dwBackBufferCount }
+        } else {
+            0
+        };
         let surface = create_surface(w, h, bpp, is_primary, has_flip, bbc);
         let surface_v1: IDirectDrawSurface = surface.into();
         let surface_v4: IDirectDrawSurface4 = surface_v1.cast()?;
@@ -563,10 +588,28 @@ impl IDirectDraw4_Impl for DirectDrawImpl_Impl {
     fn DuplicateSurface(&self, _a: Ref<'_, IDirectDrawSurface4>) -> Result<IDirectDrawSurface4> {
         Err(Error::from(HRESULT(DXERR_GENERIC as i32)))
     }
-    fn EnumDisplayModes(&self, _a: u32, _b: *mut DDSURFACEDESC2, _c: *mut core::ffi::c_void, _d: LPDDENUMMODESCALLBACK2) -> Result<()> {
+    fn EnumDisplayModes(
+        &self,
+        _a: u32,
+        _b: *mut DDSURFACEDESC2,
+        _c: *mut core::ffi::c_void,
+        _d: LPDDENUMMODESCALLBACK2,
+    ) -> Result<()> {
         Ok(())
     }
-    fn EnumSurfaces(&self, _a: u32, _b: *mut DDSURFACEDESC2, _c: *mut core::ffi::c_void, _d: Option<unsafe extern "system" fn(Ref<'_, IDirectDrawSurface4>, *mut DDSURFACEDESC2, *mut core::ffi::c_void) -> HRESULT>) -> Result<()> {
+    fn EnumSurfaces(
+        &self,
+        _a: u32,
+        _b: *mut DDSURFACEDESC2,
+        _c: *mut core::ffi::c_void,
+        _d: Option<
+            unsafe extern "system" fn(
+                Ref<'_, IDirectDrawSurface4>,
+                *mut DDSURFACEDESC2,
+                *mut core::ffi::c_void,
+            ) -> HRESULT,
+        >,
+    ) -> Result<()> {
         Ok(())
     }
     fn FlipToGDISurface(&self) -> Result<()> {
@@ -645,10 +688,21 @@ impl IDirectDraw7_Impl for DirectDrawImpl_Impl {
     fn CreateClipper(&self, a: u32, b: OutRef<'_, IDirectDrawClipper>, c: Ref<'_, IUnknown>) -> Result<()> {
         IDirectDraw_Impl::CreateClipper(self, a, b, c)
     }
-    fn CreatePalette(&self, a: u32, b: *mut PALETTEENTRY, c: OutRef<'_, IDirectDrawPalette>, d: Ref<'_, IUnknown>) -> Result<()> {
+    fn CreatePalette(
+        &self,
+        a: u32,
+        b: *mut PALETTEENTRY,
+        c: OutRef<'_, IDirectDrawPalette>,
+        d: Ref<'_, IUnknown>,
+    ) -> Result<()> {
         IDirectDraw_Impl::CreatePalette(self, a, b, c, d)
     }
-    fn CreateSurface(&self, lpddsd: *mut DDSURFACEDESC2, lplpddsurface: OutRef<'_, IDirectDrawSurface7>, _punkouter: Ref<'_, IUnknown>) -> Result<()> {
+    fn CreateSurface(
+        &self,
+        lpddsd: *mut DDSURFACEDESC2,
+        lplpddsurface: OutRef<'_, IDirectDrawSurface7>,
+        _punkouter: Ref<'_, IUnknown>,
+    ) -> Result<()> {
         if lpddsd.is_null() {
             return Err(E_INVALIDARG.into());
         }
@@ -661,10 +715,18 @@ impl IDirectDraw7_Impl for DirectDrawImpl_Impl {
         } else {
             let w = if desc.dwWidth > 0 { ((desc.dwWidth + 1) / 2 * 2) as i32 } else { state().lock().unwrap().width };
             let h = if desc.dwHeight > 0 { desc.dwHeight as i32 } else { state().lock().unwrap().height };
-            let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 { unsafe { desc.Anonymous5.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 } } else { 16 };
+            let bpp = if desc.dwFlags & DDSD_PIXELFORMAT as u32 != 0 {
+                unsafe { desc.Anonymous5.ddpfPixelFormat.Anonymous1.dwRGBBitCount as i32 }
+            } else {
+                16
+            };
             (w as i32, h, bpp)
         };
-        let bbc = if desc.dwFlags & DDSD_BACKBUFFERCOUNT as u32 != 0 { unsafe { desc.Anonymous2.dwBackBufferCount } } else { 0 };
+        let bbc = if desc.dwFlags & DDSD_BACKBUFFERCOUNT as u32 != 0 {
+            unsafe { desc.Anonymous2.dwBackBufferCount }
+        } else {
+            0
+        };
         let surface = create_surface(w, h, bpp, is_primary, has_flip, bbc);
         let surface_v1: IDirectDrawSurface = surface.into();
         let surface_v7: IDirectDrawSurface7 = surface_v1.cast()?;
@@ -674,10 +736,28 @@ impl IDirectDraw7_Impl for DirectDrawImpl_Impl {
     fn DuplicateSurface(&self, _a: Ref<'_, IDirectDrawSurface7>) -> Result<IDirectDrawSurface7> {
         Err(Error::from(HRESULT(DXERR_GENERIC as i32)))
     }
-    fn EnumDisplayModes(&self, _a: u32, _b: *mut DDSURFACEDESC2, _c: *mut core::ffi::c_void, _d: LPDDENUMMODESCALLBACK2) -> Result<()> {
+    fn EnumDisplayModes(
+        &self,
+        _a: u32,
+        _b: *mut DDSURFACEDESC2,
+        _c: *mut core::ffi::c_void,
+        _d: LPDDENUMMODESCALLBACK2,
+    ) -> Result<()> {
         Ok(())
     }
-    fn EnumSurfaces(&self, _a: u32, _b: *mut DDSURFACEDESC2, _c: *mut core::ffi::c_void, _d: Option<unsafe extern "system" fn(Ref<'_, IDirectDrawSurface7>, *mut DDSURFACEDESC2, *mut core::ffi::c_void) -> HRESULT>) -> Result<()> {
+    fn EnumSurfaces(
+        &self,
+        _a: u32,
+        _b: *mut DDSURFACEDESC2,
+        _c: *mut core::ffi::c_void,
+        _d: Option<
+            unsafe extern "system" fn(
+                Ref<'_, IDirectDrawSurface7>,
+                *mut DDSURFACEDESC2,
+                *mut core::ffi::c_void,
+            ) -> HRESULT,
+        >,
+    ) -> Result<()> {
         Ok(())
     }
     fn FlipToGDISurface(&self) -> Result<()> {
@@ -757,8 +837,14 @@ impl IDirectDraw7_Impl for DirectDrawImpl_Impl {
 
 /// Adjust a window rect using the window's current styles.
 unsafe fn adjust_window_rect(rc: &mut RECT, hwnd: HWND) {
-    let style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(hwnd, windows::Win32::UI::WindowsAndMessaging::GWL_STYLE) as u32;
-    let ex_style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(hwnd, windows::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE) as u32;
+    let style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(
+        hwnd,
+        windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
+    ) as u32;
+    let ex_style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(
+        hwnd,
+        windows::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE,
+    ) as u32;
     let _ = AdjustWindowRectEx(
         rc,
         windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE(style),

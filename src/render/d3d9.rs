@@ -9,11 +9,11 @@
 use std::sync::atomic::Ordering;
 
 use windows::Win32::Foundation::*;
-use windows::Win32::Graphics::Direct3D9::*;
 use windows::Win32::Graphics::Direct3D9::IDirect3DBaseTexture9;
+use windows::Win32::Graphics::Direct3D9::*;
 use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 
-use crate::state::{state, SurfaceBuffers};
+use crate::state::{SurfaceBuffers, state};
 
 pub(crate) struct D3D9State {
     d3d: IDirect3D9,
@@ -39,12 +39,7 @@ impl D3D9State {
                 }
             };
 
-            let mut rc = RECT {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-            };
+            let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 0 };
             if !hwnd.is_invalid() {
                 GetClientRect(hwnd, &mut rc);
             }
@@ -113,24 +108,12 @@ impl D3D9State {
         unsafe {
             let _ = self.device.SetRenderState(D3DRS_ZENABLE, 0);
             let _ = self.device.SetRenderState(D3DRS_LIGHTING, 0);
-            let _ = self
-                .device
-                .SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1.0 as u32);
-            let _ = self
-                .device
-                .SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
-            let _ = self
-                .device
-                .SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT.0 as u32);
-            let _ = self
-                .device
-                .SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT.0 as u32);
-            let _ = self
-                .device
-                .SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP.0 as u32);
-            let _ = self
-                .device
-                .SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP.0 as u32);
+            let _ = self.device.SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1.0 as u32);
+            let _ = self.device.SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+            let _ = self.device.SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT.0 as u32);
+            let _ = self.device.SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT.0 as u32);
+            let _ = self.device.SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP.0 as u32);
+            let _ = self.device.SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP.0 as u32);
         }
     }
 
@@ -159,12 +142,7 @@ impl D3D9State {
 
     /// Recreate the swap chain if the window client area changed size.
     fn ensure_size(&mut self) {
-        let mut rc = RECT {
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
-        };
+        let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 0 };
         if !self.hwnd.is_invalid() {
             unsafe {
                 GetClientRect(self.hwnd, &mut rc);
@@ -226,10 +204,7 @@ impl D3D9State {
             None => return,
         };
         unsafe {
-            let mut lr = D3DLOCKED_RECT {
-                Pitch: 0,
-                pBits: std::ptr::null_mut(),
-            };
+            let mut lr = D3DLOCKED_RECT { Pitch: 0, pBits: std::ptr::null_mut() };
             if tex.LockRect(0, &mut lr, std::ptr::null(), 0).is_err() {
                 return;
             }
@@ -252,33 +227,18 @@ impl D3D9State {
                             let b = *p;
                             let g = *p.add(1);
                             let r = *p.add(2);
-                            (b as u32)
-                                | ((g as u32) << 8)
-                                | ((r as u32) << 16)
-                                | 0xFF00_0000
+                            (b as u32) | ((g as u32) << 8) | ((r as u32) << 16) | 0xFF00_0000
                         }
                         16 => {
                             let p = srow.add(x * 2) as *const u16;
                             let v = *p;
                             let (r, g, b) = if rgb555 {
-                                (
-                                    ((v >> 10) & 0x1F) as u32,
-                                    ((v >> 5) & 0x1F) as u32,
-                                    (v & 0x1F) as u32,
-                                )
+                                (((v >> 10) & 0x1F) as u32, ((v >> 5) & 0x1F) as u32, (v & 0x1F) as u32)
                             } else {
-                                (
-                                    ((v >> 11) & 0x1F) as u32,
-                                    ((v >> 5) & 0x3F) as u32,
-                                    (v & 0x1F) as u32,
-                                )
+                                (((v >> 11) & 0x1F) as u32, ((v >> 5) & 0x3F) as u32, (v & 0x1F) as u32)
                             };
                             let r8 = (r * 255 / 31) as u32;
-                            let g8 = if rgb555 {
-                                (g * 255 / 31) as u32
-                            } else {
-                                (g * 255 / 63) as u32
-                            };
+                            let g8 = if rgb555 { (g * 255 / 31) as u32 } else { (g * 255 / 63) as u32 };
                             let b8 = (b * 255 / 31) as u32;
                             b8 | (g8 << 8) | (r8 << 16) | 0xFF00_0000
                         }
@@ -311,9 +271,7 @@ impl D3D9State {
             }
 
             let _ = self.device.BeginScene();
-            let _ = self
-                .device
-                .Clear(0, std::ptr::null(), D3DCLEAR_TARGET as u32, 0x0000_0000, 0.0, 0);
+            let _ = self.device.Clear(0, std::ptr::null(), D3DCLEAR_TARGET as u32, 0x0000_0000, 0.0, 0);
 
             // D3D viewport origin is top-left (Windows coordinates), matching
             // `st.render.viewport`, so no Y flip is needed (unlike OpenGL).
@@ -321,24 +279,12 @@ impl D3D9State {
                 let st = state().lock().unwrap();
                 let vp = st.render.viewport;
                 if vp.right > vp.left && vp.bottom > vp.top {
-                    (
-                        vp.left as u32,
-                        vp.top as u32,
-                        (vp.right - vp.left) as u32,
-                        (vp.bottom - vp.top) as u32,
-                    )
+                    (vp.left as u32, vp.top as u32, (vp.right - vp.left) as u32, (vp.bottom - vp.top) as u32)
                 } else {
                     (0, 0, self.client_w as u32, self.client_h as u32)
                 }
             };
-            let vp = D3DVIEWPORT9 {
-                X: vx,
-                Y: vy,
-                Width: vw,
-                Height: vh,
-                MinZ: 0.0,
-                MaxZ: 1.0,
-            };
+            let vp = D3DVIEWPORT9 { X: vx, Y: vy, Width: vw, Height: vh, MinZ: 0.0, MaxZ: 1.0 };
             let _ = self.device.SetViewport(&vp);
 
             if let Some(tex) = self.tex.as_ref() {
@@ -367,26 +313,13 @@ impl D3D9State {
                      1.0, -1.0, 0.0,  u1, v1,
                 ];
                 let _ = self.device.SetFVF(D3DFVF_XYZ | D3DFVF_TEX1);
-                let _ = self.device.DrawPrimitiveUP(
-                    D3DPT_TRIANGLESTRIP,
-                    2,
-                    verts.as_ptr() as *const core::ffi::c_void,
-                    20,
-                );
+                let _ =
+                    self.device.DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, verts.as_ptr() as *const core::ffi::c_void, 20);
                 let _ = self.device.SetTexture(0, None);
             }
 
             let _ = self.device.EndScene();
-            if self
-                .device
-                .Present(
-                    std::ptr::null(),
-                    std::ptr::null(),
-                    HWND::default(),
-                    std::ptr::null(),
-                )
-                .is_err()
-            {
+            if self.device.Present(std::ptr::null(), std::ptr::null(), HWND::default(), std::ptr::null()).is_err() {
                 return;
             }
 

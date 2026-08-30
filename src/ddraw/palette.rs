@@ -1,8 +1,8 @@
 use std::cell::RefCell;
-use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::DirectDraw::*;
 use windows::Win32::Graphics::Gdi::PALETTEENTRY;
+use windows::core::*;
 
 #[implement(IDirectDrawPalette)]
 pub struct PaletteImpl {
@@ -18,13 +18,7 @@ impl IDirectDrawPalette_Impl for PaletteImpl_Impl {
         Ok(())
     }
 
-    fn GetEntries(
-        &self,
-        _dwflags: u32,
-        dwstart: u32,
-        dwcount: u32,
-        lpentries: *mut PALETTEENTRY,
-    ) -> Result<()> {
+    fn GetEntries(&self, _dwflags: u32, dwstart: u32, dwcount: u32, lpentries: *mut PALETTEENTRY) -> Result<()> {
         if lpentries.is_null() {
             return Err(E_INVALIDARG.into());
         }
@@ -37,33 +31,17 @@ impl IDirectDrawPalette_Impl for PaletteImpl_Impl {
         unsafe {
             for i in 0..count {
                 let e = &entries[start + i];
-                *lpentries.add(i) = PALETTEENTRY {
-                    peRed: e[2],
-                    peGreen: e[1],
-                    peBlue: e[0],
-                    peFlags: e[3],
-                };
+                *lpentries.add(i) = PALETTEENTRY { peRed: e[2], peGreen: e[1], peBlue: e[0], peFlags: e[3] };
             }
         }
         Ok(())
     }
 
-    fn Initialize(
-        &self,
-        _lpdd: Ref<'_, IDirectDraw>,
-        _dwflags: u32,
-        _lpddcolorarray: *mut PALETTEENTRY,
-    ) -> Result<()> {
+    fn Initialize(&self, _lpdd: Ref<'_, IDirectDraw>, _dwflags: u32, _lpddcolorarray: *mut PALETTEENTRY) -> Result<()> {
         Ok(())
     }
 
-    fn SetEntries(
-        &self,
-        _dwflags: u32,
-        dwstart: u32,
-        dwcount: u32,
-        lpentries: *mut PALETTEENTRY,
-    ) -> Result<()> {
+    fn SetEntries(&self, _dwflags: u32, dwstart: u32, dwcount: u32, lpentries: *mut PALETTEENTRY) -> Result<()> {
         if lpentries.is_null() {
             return Err(E_INVALIDARG.into());
         }

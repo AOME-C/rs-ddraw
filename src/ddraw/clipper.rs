@@ -1,7 +1,7 @@
-use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::DirectDraw::*;
 use windows::Win32::Graphics::Gdi::RGNDATA;
+use windows::core::*;
 
 #[implement(IDirectDrawClipper)]
 pub struct ClipperImpl {
@@ -9,12 +9,7 @@ pub struct ClipperImpl {
 }
 
 impl IDirectDrawClipper_Impl for ClipperImpl_Impl {
-    fn GetClipList(
-        &self,
-        _lprect: *mut RECT,
-        _lpcliplist: *mut RGNDATA,
-        _lpdwsize: *mut u32,
-    ) -> Result<()> {
+    fn GetClipList(&self, _lprect: *mut RECT, _lpcliplist: *mut RGNDATA, _lpdwsize: *mut u32) -> Result<()> {
         Err(Error::from(HRESULT(DXERR_GENERIC as i32)))
     }
 

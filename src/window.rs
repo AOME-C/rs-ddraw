@@ -5,10 +5,10 @@
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::DirectDraw::DDSCL_FULLSCREEN;
 use windows::Win32::Graphics::Gdi::*;
-use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+use windows::Win32::UI::WindowsAndMessaging::*;
 
-use crate::state::{state, RENDERER_D3D9, RENDERER_GDI, RENDERER_OPENGL, TIMER_FIX_WINDOWPOS};
+use crate::state::{RENDERER_D3D9, RENDERER_GDI, RENDERER_OPENGL, TIMER_FIX_WINDOWPOS, state};
 
 // Virtual key constants (numeric to avoid enum casts).
 const VK_TAB: i32 = 0x09;
@@ -32,24 +32,14 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
     match msg {
         WM_SIZE => {
             let mut st = state().lock().unwrap();
-            let mut wr = RECT {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-            };
+            let mut wr = RECT { left: 0, top: 0, right: 0, bottom: 0 };
             GetWindowRect(hwnd, &mut wr);
             st.win_rect = wr;
             st.render.invalidate = true;
         }
         WM_MOVE => {
             let mut st = state().lock().unwrap();
-            let mut wr = RECT {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-            };
+            let mut wr = RECT { left: 0, top: 0, right: 0, bottom: 0 };
             GetWindowRect(hwnd, &mut wr);
             st.win_rect = wr;
         }
@@ -86,7 +76,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
             // TS menu redraw workaround: force a repaint of the client area.
             let _ = InvalidateRect(Some(hwnd), None, false);
         }
-                WM_SYSCOMMAND => {
+        WM_SYSCOMMAND => {
             if (wparam.0 & 0xfff0) == SC_CLOSE as usize {
                 std::process::exit(0);
             }
@@ -118,7 +108,10 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         _ => {}
     }
 
-    let prev = { let st = state().lock().unwrap(); st.wnd_proc as usize };
+    let prev = {
+        let st = state().lock().unwrap();
+        st.wnd_proc as usize
+    };
     if prev != 0 {
         let prev_proc: WNDPROC = std::mem::transmute::<usize, WNDPROC>(prev);
         CallWindowProcW(prev_proc, hwnd, msg, wparam, lparam)
@@ -314,30 +307,19 @@ pub(crate) unsafe fn set_display_mode(_width: i32, _height: i32, _bpp: i32) -> b
 /// Confine the cursor to the window's client area.
 pub(crate) unsafe fn mouse_lock() {
     crate::dd_log!("mouse_lock: begin");
-    let hwnd = { let st = state().lock().unwrap(); st.hwnd };
+    let hwnd = {
+        let st = state().lock().unwrap();
+        st.hwnd
+    };
     if hwnd.is_invalid() {
         return;
     }
-    let mut rc = RECT {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-    };
+    let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 0 };
     GetClientRect(hwnd, &mut rc);
-    let mut wr = RECT {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-    };
+    let mut wr = RECT { left: 0, top: 0, right: 0, bottom: 0 };
     GetWindowRect(hwnd, &mut wr);
-    let clip = RECT {
-        left: wr.left + rc.left,
-        top: wr.top + rc.top,
-        right: wr.left + rc.right,
-        bottom: wr.top + rc.bottom,
-    };
+    let clip =
+        RECT { left: wr.left + rc.left, top: wr.top + rc.top, right: wr.left + rc.right, bottom: wr.top + rc.bottom };
     crate::dd_log!("mouse_lock: ClipCursor begin");
     let _ = ClipCursor(Some(&clip));
     crate::dd_log!("mouse_lock: ClipCursor done");
@@ -359,23 +341,11 @@ pub(crate) unsafe fn mouse_unlock(show: bool) {
 
 /// Center the cursor within the window's client area.
 pub(crate) unsafe fn center_mouse(hwnd: HWND) {
-    let mut rc = RECT {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-    };
+    let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 0 };
     GetClientRect(hwnd, &mut rc);
-    let mut wr = RECT {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-    };
+    let mut wr = RECT { left: 0, top: 0, right: 0, bottom: 0 };
     GetWindowRect(hwnd, &mut wr);
     let x = wr.left + (rc.left + rc.right) / 2;
     let y = wr.top + (rc.top + rc.bottom) / 2;
     let _ = SetCursorPos(x, y);
 }
-
-

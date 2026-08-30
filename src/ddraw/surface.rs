@@ -11,23 +11,17 @@
 
 use std::sync::Arc;
 
-use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::DirectDraw::*;
 use windows::Win32::Graphics::Gdi::{
-    CreateCompatibleDC, CreateDIBSection, DIB_RGB_COLORS, GetDC, HDC, HGDIOBJ, BITMAPINFO,
-    BITMAPINFOHEADER, BI_BITFIELDS, ReleaseDC, SelectObject,
+    BI_BITFIELDS, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, CreateDIBSection, DIB_RGB_COLORS, GetDC, HDC,
+    HGDIOBJ, ReleaseDC, SelectObject,
 };
+use windows::core::*;
 
 use crate::state::SurfaceBuffers;
 
-#[implement(
-    IDirectDrawSurface7,
-    IDirectDrawSurface4,
-    IDirectDrawSurface3,
-    IDirectDrawSurface2,
-    IDirectDrawSurface
-)]
+#[implement(IDirectDrawSurface7, IDirectDrawSurface4, IDirectDrawSurface3, IDirectDrawSurface2, IDirectDrawSurface)]
 pub struct SurfaceImpl {
     pub width: i32,
     pub height: i32,
@@ -109,21 +103,10 @@ unsafe fn make_buffers(hdc: HDC, width: i32, height: i32, bpp: i32) -> SurfaceBu
     let mask_ptr = buf.as_mut_ptr().add(header_size) as *mut u32;
     std::ptr::copy_nonoverlapping(masks.as_ptr(), mask_ptr, 3);
 
-    let base = if hdc.is_invalid() {
-        GetDC(None)
-    } else {
-        hdc
-    };
+    let base = if hdc.is_invalid() { GetDC(None) } else { hdc };
     let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
-    let bitmap = CreateDIBSection(
-        Some(base),
-        buf.as_ptr() as *const BITMAPINFO,
-        DIB_RGB_COLORS,
-        &mut bits,
-        None,
-        0,
-    )
-    .unwrap();
+    let bitmap =
+        CreateDIBSection(Some(base), buf.as_ptr() as *const BITMAPINFO, DIB_RGB_COLORS, &mut bits, None, 0).unwrap();
     let memdc = CreateCompatibleDC(Some(base));
     let default_bm = SelectObject(memdc, HGDIOBJ(bitmap.0));
     if hdc.is_invalid() {
@@ -152,16 +135,7 @@ impl SurfaceImpl {
         } else {
             DDSCAPS_OFFSCREENPLAIN as u32 | DDSCAPS_SYSTEMMEMORY as u32
         };
-        Self {
-            width,
-            height,
-            bpp,
-            pitch: buffers.pitch,
-            caps,
-            is_primary,
-            buffers,
-            backbuffer: None,
-        }
+        Self { width, height, bpp, pitch: buffers.pitch, caps, is_primary, buffers, backbuffer: None }
     }
 
     /// Attach a back buffer (shares a separate DIB with the primary).
@@ -171,36 +145,20 @@ impl SurfaceImpl {
         self
     }
 
-    fn from_buffers(
-        buffers: Arc<SurfaceBuffers>,
-        width: i32,
-        height: i32,
-        bpp: i32,
-        is_primary: bool,
-    ) -> Self {
+    fn from_buffers(buffers: Arc<SurfaceBuffers>, width: i32, height: i32, bpp: i32, is_primary: bool) -> Self {
         let caps = if is_primary {
             DDSCAPS_PRIMARYSURFACE as u32 | DDSCAPS_VIDEOMEMORY as u32
         } else {
             DDSCAPS_OFFSCREENPLAIN as u32 | DDSCAPS_SYSTEMMEMORY as u32
         };
-        Self {
-            width,
-            height,
-            bpp,
-            pitch: buffers.pitch,
-            caps,
-            is_primary,
-            buffers,
-            backbuffer: None,
-        }
+        Self { width, height, bpp, pitch: buffers.pitch, caps, is_primary, buffers, backbuffer: None }
     }
 
     // ---- shared implementation helpers (use the v7/DDSURFACEDESC2 types) ----
 
     unsafe fn fill_desc2(&self, desc: &mut DDSURFACEDESC2, pixels: *mut u8) {
         desc.dwSize = std::mem::size_of::<DDSURFACEDESC2>() as u32;
-        desc.dwFlags = (DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PITCH | DDSD_PIXELFORMAT
-            | DDSD_LPSURFACE) as u32;
+        desc.dwFlags = (DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PITCH | DDSD_PIXELFORMAT | DDSD_LPSURFACE) as u32;
         desc.dwWidth = self.width as u32;
         desc.dwHeight = self.height as u32;
         desc.Anonymous1.lPitch = self.pitch;
@@ -230,8 +188,7 @@ impl SurfaceImpl {
                 let r = &*rect;
                 let bytes_pp = (self.bpp / 8).max(1) as i32;
                 let offset = (r.top * self.pitch) + (r.left * bytes_pp);
-                (*desc).lpSurface =
-                    self.buffers.surface.add(offset as usize) as *mut core::ffi::c_void;
+                (*desc).lpSurface = self.buffers.surface.add(offset as usize) as *mut core::ffi::c_void;
                 (*desc).dwWidth = (r.right - r.left) as u32;
                 (*desc).dwHeight = (r.bottom - r.top) as u32;
             }
@@ -306,8 +263,7 @@ impl SurfaceImpl {
         if (requested & DDSCAPS_BACKBUFFER as u32) != 0 {
             if let Some(ref bb) = self.backbuffer {
                 let mut s = SurfaceImpl::from_buffers(bb.clone(), self.width, self.height, self.bpp, false);
-                s.caps =
-                    (DDSCAPS_BACKBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY) as u32;
+                s.caps = (DDSCAPS_BACKBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY) as u32;
                 let surface: IDirectDrawSurface = s.into();
                 return surface.cast::<IDirectDrawSurface7>();
             }
@@ -323,8 +279,7 @@ impl SurfaceImpl {
         if (requested & DDSCAPS_BACKBUFFER as u32) != 0 {
             if let Some(ref bb) = self.backbuffer {
                 let mut s = SurfaceImpl::from_buffers(bb.clone(), self.width, self.height, self.bpp, false);
-                s.caps =
-                    (DDSCAPS_BACKBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY) as u32;
+                s.caps = (DDSCAPS_BACKBUFFER | DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY) as u32;
                 let surface: IDirectDrawSurface = s.into();
                 return surface.cast::<IDirectDrawSurface7>();
             }
@@ -383,11 +338,7 @@ impl SurfaceImpl {
         // the source lock before acquiring `self`'s lock avoids that.
         let src_copy: Option<(Vec<u8>, usize, usize, usize)> = if let Some(src_iface) = src {
             let mut src_desc = DDSURFACEDESC2::default();
-            if unsafe {
-                src_iface
-                    .Lock(sr, &mut src_desc, 0, HANDLE(std::ptr::null_mut()))
-                    .is_ok()
-            } {
+            if unsafe { src_iface.Lock(sr, &mut src_desc, 0, HANDLE(std::ptr::null_mut())).is_ok() } {
                 let sp = src_desc.lpSurface as *mut u8;
                 let spitch = unsafe { src_desc.Anonymous1.lPitch } as usize;
                 let sw = src_desc.dwWidth as usize;
@@ -395,11 +346,7 @@ impl SurfaceImpl {
                 let mut data = vec![0u8; sh * spitch];
                 for y in 0..sh {
                     unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            sp.add(y * spitch),
-                            data.as_mut_ptr().add(y * spitch),
-                            spitch,
-                        );
+                        std::ptr::copy_nonoverlapping(sp.add(y * spitch), data.as_mut_ptr().add(y * spitch), spitch);
                     }
                 }
                 let _ = unsafe { src_iface.Unlock(std::ptr::null_mut::<RECT>()) };
@@ -444,11 +391,7 @@ impl SurfaceImpl {
                     let d = dst_ptr as usize + ((dy0 + y) * dst_pitch) + dx0 * bytes_pp;
                     let s = data.as_ptr() as usize + ((sy0 + y) * src_pitch) + sx0 * bytes_pp;
                     unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            s as *const u8,
-                            d as *mut u8,
-                            dw * bytes_pp,
-                        );
+                        std::ptr::copy_nonoverlapping(s as *const u8, d as *mut u8, dw * bytes_pp);
                     }
                 }
             } else if dw > 0 && dh > 0 && sw > 0 && sh > 0 {
@@ -469,13 +412,13 @@ impl SurfaceImpl {
                 }
             }
         }
-            if self.is_primary {
-                static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
-                    crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
-                }
-                crate::state::mark_dirty();
+        if self.is_primary {
+            static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
+                crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
             }
+            crate::state::mark_dirty();
+        }
         Ok(())
     }
 }
@@ -523,33 +466,17 @@ impl IDirectDrawSurface_Impl for SurfaceImpl_Impl {
     fn BltBatch(&self, _b: *mut DDBLTBATCH, _c: u32, _f: u32) -> Result<()> {
         Ok(())
     }
-    fn BltFast(
-        &self,
-        _x: u32,
-        _y: u32,
-        src: Ref<'_, IDirectDrawSurface>,
-        r: *mut RECT,
-        _t: u32,
-    ) -> Result<()> {
+    fn BltFast(&self, _x: u32, _y: u32, src: Ref<'_, IDirectDrawSurface>, r: *mut RECT, _t: u32) -> Result<()> {
         let s7 = src.as_ref().and_then(|s| s.cast::<IDirectDrawSurface7>().ok());
         self.blt_impl(std::ptr::null_mut(), s7, r, 0, std::ptr::null_mut())
     }
     fn DeleteAttachedSurface(&self, _f: u32, _s: Ref<'_, IDirectDrawSurface>) -> Result<()> {
         Ok(())
     }
-    fn EnumAttachedSurfaces(
-        &self,
-        _c: *mut core::ffi::c_void,
-        _cb: LPDDENUMSURFACESCALLBACK,
-    ) -> Result<()> {
+    fn EnumAttachedSurfaces(&self, _c: *mut core::ffi::c_void, _cb: LPDDENUMSURFACESCALLBACK) -> Result<()> {
         Ok(())
     }
-    fn EnumOverlayZOrders(
-        &self,
-        _f: u32,
-        _c: *mut core::ffi::c_void,
-        _cb: LPDDENUMSURFACESCALLBACK,
-    ) -> Result<()> {
+    fn EnumOverlayZOrders(&self, _f: u32, _c: *mut core::ffi::c_void, _cb: LPDDENUMSURFACESCALLBACK) -> Result<()> {
         Ok(())
     }
     fn Flip(&self, _target: Ref<'_, IDirectDrawSurface>, _flags: u32) -> Result<()> {
@@ -620,13 +547,13 @@ impl IDirectDrawSurface_Impl for SurfaceImpl_Impl {
     }
     fn Unlock(&self, _r: *mut core::ffi::c_void) -> Result<()> {
         self.buffers.lock.release();
-            if self.is_primary {
-                static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
-                    crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
-                }
-                crate::state::mark_dirty();
+        if self.is_primary {
+            static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
+                crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
             }
+            crate::state::mark_dirty();
+        }
         Ok(())
     }
     fn UpdateOverlay(
@@ -657,7 +584,14 @@ impl IDirectDrawSurface2_Impl for SurfaceImpl_Impl {
     fn AddOverlayDirtyRect(&self, _r: *mut RECT) -> Result<()> {
         Ok(())
     }
-    fn Blt(&self, dr: *mut RECT, src: Ref<'_, IDirectDrawSurface2>, sr: *mut RECT, flags: u32, fx: *mut DDBLTFX) -> Result<()> {
+    fn Blt(
+        &self,
+        dr: *mut RECT,
+        src: Ref<'_, IDirectDrawSurface2>,
+        sr: *mut RECT,
+        flags: u32,
+        fx: *mut DDBLTFX,
+    ) -> Result<()> {
         let s7 = src.as_ref().and_then(|s| s.cast::<IDirectDrawSurface7>().ok());
         self.blt_impl(dr, s7, sr, flags, fx)
     }
@@ -745,16 +679,23 @@ impl IDirectDrawSurface2_Impl for SurfaceImpl_Impl {
     }
     fn Unlock(&self, _r: *mut core::ffi::c_void) -> Result<()> {
         self.buffers.lock.release();
-            if self.is_primary {
-                static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
-                    crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
-                }
-                crate::state::mark_dirty();
+        if self.is_primary {
+            static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
+                crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
             }
+            crate::state::mark_dirty();
+        }
         Ok(())
     }
-    fn UpdateOverlay(&self, _sr: *mut RECT, _s: Ref<'_, IDirectDrawSurface2>, _dr: *mut RECT, _f: u32, _fx: *mut DDOVERLAYFX) -> Result<()> {
+    fn UpdateOverlay(
+        &self,
+        _sr: *mut RECT,
+        _s: Ref<'_, IDirectDrawSurface2>,
+        _dr: *mut RECT,
+        _f: u32,
+        _fx: *mut DDOVERLAYFX,
+    ) -> Result<()> {
         Err(dderr(DXERR_GENERIC))
     }
     fn UpdateOverlayDisplay(&self, _f: u32) -> Result<()> {
@@ -784,7 +725,14 @@ impl IDirectDrawSurface3_Impl for SurfaceImpl_Impl {
     fn AddOverlayDirtyRect(&self, _r: *mut RECT) -> Result<()> {
         Ok(())
     }
-    fn Blt(&self, dr: *mut RECT, src: Ref<'_, IDirectDrawSurface3>, sr: *mut RECT, flags: u32, fx: *mut DDBLTFX) -> Result<()> {
+    fn Blt(
+        &self,
+        dr: *mut RECT,
+        src: Ref<'_, IDirectDrawSurface3>,
+        sr: *mut RECT,
+        flags: u32,
+        fx: *mut DDBLTFX,
+    ) -> Result<()> {
         let s7 = src.as_ref().and_then(|s| s.cast::<IDirectDrawSurface7>().ok());
         self.blt_impl(dr, s7, sr, flags, fx)
     }
@@ -872,16 +820,23 @@ impl IDirectDrawSurface3_Impl for SurfaceImpl_Impl {
     }
     fn Unlock(&self, _r: *mut core::ffi::c_void) -> Result<()> {
         self.buffers.lock.release();
-            if self.is_primary {
-                static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
-                    crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
-                }
-                crate::state::mark_dirty();
+        if self.is_primary {
+            static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
+                crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
             }
+            crate::state::mark_dirty();
+        }
         Ok(())
     }
-    fn UpdateOverlay(&self, _sr: *mut RECT, _s: Ref<'_, IDirectDrawSurface3>, _dr: *mut RECT, _f: u32, _fx: *mut DDOVERLAYFX) -> Result<()> {
+    fn UpdateOverlay(
+        &self,
+        _sr: *mut RECT,
+        _s: Ref<'_, IDirectDrawSurface3>,
+        _dr: *mut RECT,
+        _f: u32,
+        _fx: *mut DDOVERLAYFX,
+    ) -> Result<()> {
         Err(dderr(DXERR_GENERIC))
     }
     fn UpdateOverlayDisplay(&self, _f: u32) -> Result<()> {
@@ -914,7 +869,14 @@ impl IDirectDrawSurface4_Impl for SurfaceImpl_Impl {
     fn AddOverlayDirtyRect(&self, _r: *mut RECT) -> Result<()> {
         Ok(())
     }
-    fn Blt(&self, dr: *mut RECT, src: Ref<'_, IDirectDrawSurface4>, sr: *mut RECT, flags: u32, fx: *mut DDBLTFX) -> Result<()> {
+    fn Blt(
+        &self,
+        dr: *mut RECT,
+        src: Ref<'_, IDirectDrawSurface4>,
+        sr: *mut RECT,
+        flags: u32,
+        fx: *mut DDBLTFX,
+    ) -> Result<()> {
         let s7 = src.as_ref().and_then(|s| s.cast::<IDirectDrawSurface7>().ok());
         self.blt_impl(dr, s7, sr, flags, fx)
     }
@@ -1002,16 +964,23 @@ impl IDirectDrawSurface4_Impl for SurfaceImpl_Impl {
     }
     fn Unlock(&self, _r: *mut RECT) -> Result<()> {
         self.buffers.lock.release();
-            if self.is_primary {
-                static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
-                    crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
-                }
-                crate::state::mark_dirty();
+        if self.is_primary {
+            static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
+                crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
             }
+            crate::state::mark_dirty();
+        }
         Ok(())
     }
-    fn UpdateOverlay(&self, _sr: *mut RECT, _s: Ref<'_, IDirectDrawSurface4>, _dr: *mut RECT, _f: u32, _fx: *mut DDOVERLAYFX) -> Result<()> {
+    fn UpdateOverlay(
+        &self,
+        _sr: *mut RECT,
+        _s: Ref<'_, IDirectDrawSurface4>,
+        _dr: *mut RECT,
+        _f: u32,
+        _fx: *mut DDOVERLAYFX,
+    ) -> Result<()> {
         Err(dderr(DXERR_GENERIC))
     }
     fn UpdateOverlayDisplay(&self, _f: u32) -> Result<()> {
@@ -1062,7 +1031,14 @@ impl IDirectDrawSurface7_Impl for SurfaceImpl_Impl {
     fn AddOverlayDirtyRect(&self, _r: *mut RECT) -> Result<()> {
         Ok(())
     }
-    fn Blt(&self, dr: *mut RECT, src: Ref<'_, IDirectDrawSurface7>, sr: *mut RECT, flags: u32, fx: *mut DDBLTFX) -> Result<()> {
+    fn Blt(
+        &self,
+        dr: *mut RECT,
+        src: Ref<'_, IDirectDrawSurface7>,
+        sr: *mut RECT,
+        flags: u32,
+        fx: *mut DDBLTFX,
+    ) -> Result<()> {
         let s7 = src.as_ref().and_then(|s| s.cast::<IDirectDrawSurface7>().ok());
         self.blt_impl(dr, s7, sr, flags, fx)
     }
@@ -1149,16 +1125,23 @@ impl IDirectDrawSurface7_Impl for SurfaceImpl_Impl {
     }
     fn Unlock(&self, _r: *mut RECT) -> Result<()> {
         self.buffers.lock.release();
-            if self.is_primary {
-                static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
-                    crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
-                }
-                crate::state::mark_dirty();
+        if self.is_primary {
+            static C: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            if C.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 24 {
+                crate::dd_log!("DIAG PUNLOCK tid={}", self.buffers.lock.owner());
             }
+            crate::state::mark_dirty();
+        }
         Ok(())
     }
-    fn UpdateOverlay(&self, _sr: *mut RECT, _s: Ref<'_, IDirectDrawSurface7>, _dr: *mut RECT, _f: u32, _fx: *mut DDOVERLAYFX) -> Result<()> {
+    fn UpdateOverlay(
+        &self,
+        _sr: *mut RECT,
+        _s: Ref<'_, IDirectDrawSurface7>,
+        _dr: *mut RECT,
+        _f: u32,
+        _fx: *mut DDOVERLAYFX,
+    ) -> Result<()> {
         Err(dderr(DXERR_GENERIC))
     }
     fn UpdateOverlayDisplay(&self, _f: u32) -> Result<()> {

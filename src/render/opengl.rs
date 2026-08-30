@@ -9,7 +9,7 @@ use windows::Win32::Graphics::OpenGL::*;
 use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 use windows::core::PCSTR;
 
-use crate::state::{state, SurfaceBuffers};
+use crate::state::{SurfaceBuffers, state};
 
 const GL_UNSIGNED_SHORT_5_6_5: u32 = 33635;
 const GL_UNSIGNED_SHORT_1_5_5_5_REV: u32 = 32822;
@@ -75,17 +75,7 @@ impl OglState {
             } else {
                 GL_UNSIGNED_SHORT_5_6_5
             };
-            glTexImage2D(
-                GL_TEXTURE_2D,
-                0,
-                GL_RGB as i32,
-                tex_w,
-                tex_h,
-                0,
-                GL_RGB,
-                t16,
-                std::ptr::null(),
-            );
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB as i32, tex_w, tex_h, 0, GL_RGB, t16, std::ptr::null());
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST as i32);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST as i32);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
@@ -101,11 +91,7 @@ impl OglState {
             let swap_fn = {
                 let name = b"wglSwapIntervalEXT\0";
                 let addr: PROC = wglGetProcAddress(PCSTR(name.as_ptr()));
-                if addr.is_some() {
-                    Some(std::mem::transmute_copy(&addr))
-                } else {
-                    None
-                }
+                if addr.is_some() { Some(std::mem::transmute_copy(&addr)) } else { None }
             };
 
             Some(OglState {
@@ -149,17 +135,7 @@ impl OglState {
             } else {
                 (GL_RGB as i32, GL_RGB, GL_UNSIGNED_SHORT_5_6_5)
             };
-            glTexImage2D(
-                GL_TEXTURE_2D,
-                0,
-                internal,
-                tex_w,
-                tex_h,
-                0,
-                format,
-                type_,
-                std::ptr::null(),
-            );
+            glTexImage2D(GL_TEXTURE_2D, 0, internal, tex_w, tex_h, 0, format, type_, std::ptr::null());
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST as i32);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST as i32);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
@@ -201,12 +177,7 @@ impl OglState {
             // upload would silently fail and the screen would freeze.
             self.ensure_texture(buffers.width, buffers.height, buffers.bpp);
 
-            let mut rc = RECT {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-            };
+            let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 0 };
             if !hwnd.is_invalid() {
                 GetClientRect(hwnd, &mut rc);
             }
@@ -217,13 +188,7 @@ impl OglState {
                 let st = state().lock().unwrap();
                 let vp = st.render.viewport;
                 if vp.right > vp.left && vp.bottom > vp.top {
-                    (
-                        vp.left,
-                        vp.top,
-                        vp.right,
-                        vp.bottom,
-                        st.render.height,
-                    )
+                    (vp.left, vp.top, vp.right, vp.bottom, st.render.height)
                 } else if cw > 0 && ch > 0 {
                     (0, 0, cw, ch, ch)
                 } else {

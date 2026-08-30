@@ -36,12 +36,7 @@ impl<'a> Drop for ReentrantGuard<'a> {
 
 impl ReentrantLock {
     pub fn new() -> Self {
-        ReentrantLock {
-            owner: AtomicU64::new(0),
-            count: AtomicU32::new(0),
-            inner: Mutex::new(()),
-            cv: Condvar::new(),
-        }
+        ReentrantLock { owner: AtomicU64::new(0), count: AtomicU32::new(0), inner: Mutex::new(()), cv: Condvar::new() }
     }
 
     /// Acquire the lock, recursively if the calling thread already holds it.
@@ -54,11 +49,7 @@ impl ReentrantLock {
             self.count.fetch_add(1, Ordering::Relaxed);
             return;
         }
-        if self
-            .owner
-            .compare_exchange(0, tid, Ordering::AcqRel, Ordering::Relaxed)
-            .is_ok()
-        {
+        if self.owner.compare_exchange(0, tid, Ordering::AcqRel, Ordering::Relaxed).is_ok() {
             self.count.store(1, Ordering::Relaxed);
             return;
         }
@@ -197,12 +188,7 @@ impl Default for RenderInfo {
             height: 0,
             scale_h: 1.0,
             scale_w: 1.0,
-            viewport: Viewport {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-            },
+            viewport: Viewport { left: 0, top: 0, right: 0, bottom: 0 },
         }
     }
 }
@@ -359,21 +345,11 @@ pub fn state() -> &'static Arc<Mutex<DDrawState>> {
 }
 
 pub fn zero_rect() -> RECT {
-    RECT {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-    }
+    RECT { left: 0, top: 0, right: 0, bottom: 0 }
 }
 
 pub fn make_rect(l: i32, t: i32, r: i32, b: i32) -> RECT {
-    RECT {
-        left: l,
-        top: t,
-        right: r,
-        bottom: b,
-    }
+    RECT { left: l, top: t, right: r, bottom: b }
 }
 
 /// Interlocked-style read of the current renderer.

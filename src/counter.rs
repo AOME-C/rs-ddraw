@@ -2,9 +2,7 @@
 
 use std::sync::OnceLock;
 
-use windows::Win32::System::Performance::{
-    QueryPerformanceCounter, QueryPerformanceFrequency,
-};
+use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 
 pub type QPCounter = i64;
 

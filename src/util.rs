@@ -1,9 +1,9 @@
 //! Misc helper functions ported from ts-ddraw `main.c` / `IDirectDraw.c`.
 
-use windows::core::PCSTR;
 use windows::Win32::Foundation::RECT;
 use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
-use windows::Win32::UI::HiDpi::{SetProcessDpiAwareness, PROCESS_DPI_AWARENESS};
+use windows::Win32::UI::HiDpi::{PROCESS_DPI_AWARENESS, SetProcessDpiAwareness};
+use windows::core::PCSTR;
 
 fn pcstr(bytes: &[u8]) -> PCSTR {
     PCSTR(bytes.as_ptr())
@@ -35,18 +35,8 @@ pub unsafe fn is_windows_xp() -> bool {
 }
 
 /// Inverse of `AdjustWindowRectEx`.
-pub unsafe fn unadjust_window_rect_ex(
-    prc: *mut RECT,
-    dw_style: u32,
-    f_menu: bool,
-    dw_ex_style: u32,
-) -> bool {
-    let mut rc = RECT {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-    };
+pub unsafe fn unadjust_window_rect_ex(prc: *mut RECT, dw_style: u32, f_menu: bool, dw_ex_style: u32) -> bool {
+    let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 0 };
     if windows::Win32::UI::WindowsAndMessaging::AdjustWindowRectEx(
         &mut rc,
         windows::Win32::UI::WindowsAndMessaging::WINDOW_STYLE(dw_style),

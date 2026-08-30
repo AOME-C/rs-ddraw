@@ -35,12 +35,7 @@ pub fn init(h_module: HMODULE) {
     if let Ok(mut guard) = LOG.lock() {
         if guard.is_none() {
             let path = log_path(h_module);
-            if let Ok(f) = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(&path)
-            {
+            if let Ok(f) = OpenOptions::new().create(true).write(true).truncate(true).open(&path) {
                 let _ = writeln!(&f, "=== rs-ddraw log started ({}) ===", path.display());
                 *guard = Some(f);
             }

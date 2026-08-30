@@ -4,7 +4,7 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
 
-use crate::state::{state, SurfaceBuffers};
+use crate::state::{SurfaceBuffers, state};
 
 /// Present the primary surface to the window using GDI Bit/StretchBlt.
 pub(crate) fn present(buffers: &SurfaceBuffers) {
@@ -15,12 +15,7 @@ pub(crate) fn present(buffers: &SurfaceBuffers) {
     if hwnd.is_invalid() || dst_hdc.is_invalid() {
         return;
     }
-    let mut rc = RECT {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-    };
+    let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 0 };
     unsafe {
         GetClientRect(hwnd, &mut rc);
         let w = rc.right - rc.left;
@@ -63,19 +58,7 @@ pub(crate) fn present(buffers: &SurfaceBuffers) {
         // scoped to just the copy; composite_child_windows below must stay
         // outside it (it sends messages to the game thread and would deadlock).
         let _guard = buffers.lock.lock();
-        let _ = StretchBlt(
-            dst_hdc,
-            dx,
-            dy,
-            dw,
-            dh,
-            Some(buffers.hdc),
-            0,
-            0,
-            buffers.width,
-            buffers.height,
-            SRCCOPY,
-        );
+        let _ = StretchBlt(dst_hdc, dx, dy, dw, dh, Some(buffers.hdc), 0, 0, buffers.width, buffers.height, SRCCOPY);
 
         if draw_fps {
             crate::render::draw_fps(dst_hdc, fps);

@@ -1,8 +1,8 @@
+use crate::dd_log;
 use windows::Win32::Foundation::*;
 use windows::Win32::System::LibraryLoader::{DisableThreadLibraryCalls, GetModuleHandleA, GetProcAddress};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
 use windows::core::{BOOL, PCSTR};
-use crate::dd_log;
 
 const DLL_PROCESS_ATTACH: u32 = 1;
 const DLL_PROCESS_DETACH: u32 = 0;
@@ -15,10 +15,7 @@ fn start_kill_switch() {
         // VK_CONTROL=0x11, VK_SHIFT=0x10, VK_Q=0x51
         loop {
             unsafe {
-                if GetAsyncKeyState(0x11) < 0
-                    && GetAsyncKeyState(0x10) < 0
-                    && GetAsyncKeyState(0x51) < 0
-                {
+                if GetAsyncKeyState(0x11) < 0 && GetAsyncKeyState(0x10) < 0 && GetAsyncKeyState(0x51) < 0 {
                     dd_log!("kill-switch (Ctrl+Shift+Q) triggered, forcing exit");
                     std::process::exit(0);
                 }
@@ -37,7 +34,9 @@ pub unsafe extern "system" fn DllMain(h_module: HMODULE, dw_reason: u32, _lp_res
             dd_log!("DllMain(DLL_PROCESS_ATTACH) hModule={:p}", h_module.0);
             set_dpi_aware();
             start_kill_switch();
-            unsafe { let _ = DisableThreadLibraryCalls(h_module); }
+            unsafe {
+                let _ = DisableThreadLibraryCalls(h_module);
+            }
         }
         DLL_PROCESS_DETACH => {
             dd_log!("DllMain(DLL_PROCESS_DETACH)");

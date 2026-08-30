@@ -4,23 +4,21 @@ pub(crate) mod d3d9;
 pub(crate) mod gdi;
 pub(crate) mod opengl;
 
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, RECT};
-use windows::Win32::Graphics::Gdi::{
-    BitBlt, GetDC, HDC, ReleaseDC, SRCCOPY, SetBkMode, SetTextColor, TextOutA, TRANSPARENT,
-};
-use windows::Win32::UI::WindowsAndMessaging::{EnumChildWindows, GetClientRect, GetWindowRect};
-use windows::core::BOOL;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, RECT};
+use windows::Win32::Graphics::Gdi::{
+    BitBlt, GetDC, HDC, ReleaseDC, SRCCOPY, SetBkMode, SetTextColor, TRANSPARENT, TextOutA,
+};
+use windows::Win32::UI::WindowsAndMessaging::{EnumChildWindows, GetClientRect, GetWindowRect};
+use windows::core::BOOL;
 
 static PRESENT_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static NO_PRIMARY_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 use crate::counter::{counter_get, counter_start};
-use crate::state::{
-    state, RENDERER_D3D9, RENDERER_GDI, RENDERER_OPENGL, SurfaceBuffers,
-};
+use crate::state::{RENDERER_D3D9, RENDERER_GDI, RENDERER_OPENGL, SurfaceBuffers, state};
 
 /// Human-readable name for a `RENDERER_*` id (used in logs).
 fn renderer_name(r: i32) -> &'static str {
@@ -54,19 +52,9 @@ extern "system" fn enum_child_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     unsafe {
         let data = &*(lparam.0 as *const ChildComposite);
         let child_dc = GetDC(Some(hwnd));
-        let mut size = RECT {
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
-        };
+        let mut size = RECT { left: 0, top: 0, right: 0, bottom: 0 };
         GetClientRect(hwnd, &mut size);
-        let mut pos = RECT {
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
-        };
+        let mut pos = RECT { left: 0, top: 0, right: 0, bottom: 0 };
         GetWindowRect(hwnd, &mut pos);
         let w = size.right - size.left;
         let h = size.bottom - size.top;
@@ -93,23 +81,10 @@ pub(crate) unsafe fn composite_child_windows(main_hwnd: HWND, surface_hdc: HDC) 
     if main_hwnd.is_invalid() || surface_hdc.is_invalid() {
         return;
     }
-    let mut wr = RECT {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-    };
+    let mut wr = RECT { left: 0, top: 0, right: 0, bottom: 0 };
     GetWindowRect(main_hwnd, &mut wr);
-    let data = ChildComposite {
-        surface_hdc,
-        win_left: wr.left,
-        win_top: wr.top,
-    };
-    EnumChildWindows(
-        Some(main_hwnd),
-        Some(enum_child_proc),
-        LPARAM(&data as *const ChildComposite as isize),
-    );
+    let data = ChildComposite { surface_hdc, win_left: wr.left, win_top: wr.top };
+    EnumChildWindows(Some(main_hwnd), Some(enum_child_proc), LPARAM(&data as *const ChildComposite as isize));
 }
 
 /// Spawn the renderer thread exactly once.
@@ -149,14 +124,7 @@ fn render_thread() {
 
     let (hwnd, hdc, w, h, renderer, auto) = {
         let st = state().lock().unwrap();
-        (
-            st.hwnd,
-            st.hdc,
-            st.width,
-            st.height,
-            st.renderer,
-            st.auto_renderer,
-        )
+        (st.hwnd, st.hdc, st.width, st.height, st.renderer, st.auto_renderer)
     };
 
     // Auto order: D3D9 -> OpenGL -> GDI. An explicit choice falls back to GDI if
@@ -230,9 +198,7 @@ fn render_thread() {
             break;
         }
 
-        let primary: Option<std::sync::Arc<SurfaceBuffers>> = {
-            state().lock().unwrap().primary.clone()
-        };
+        let primary: Option<std::sync::Arc<SurfaceBuffers>> = { state().lock().unwrap().primary.clone() };
         // Present only when the game has produced a *complete* frame. cnc-ddraw
         // uploads on `surface_updated` (raised on Blt/Flip/Unlock/ReleaseDC of
         // the primary), i.e. *after* the draw finishes — never on
@@ -254,12 +220,7 @@ fn render_thread() {
         }
         if let Some(ref buffers) = primary {
             if !PRESENT_LOGGED.swap(true, Ordering::Relaxed) {
-                crate::dd_log!(
-                    "first present: {}x{} bpp={}",
-                    buffers.width,
-                    buffers.height,
-                    buffers.bpp
-                );
+                crate::dd_log!("first present: {}x{} bpp={}", buffers.width, buffers.height, buffers.bpp);
             }
             match &mut backend {
                 Backend::D3D9(d) => d.present(buffers, dirty),
@@ -285,11 +246,7 @@ fn render_thread() {
         let target_fps = { state().lock().unwrap().target_fps };
         // When TargetFPS=0, cap at ~60fps. Sleep (no busy-spin) so we don't peg
         // a CPU core, which would starve the game's audio/mix thread.
-        let frame_len = if target_fps > 0.0 {
-            1000.0 / target_fps
-        } else {
-            1000.0 / 60.0
-        };
+        let frame_len = if target_fps > 0.0 { 1000.0 / target_fps } else { 1000.0 / 60.0 };
         let elapsed = counter_get(start);
         if elapsed < frame_len {
             let sleep_ms = (frame_len - elapsed) as u64;

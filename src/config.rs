@@ -5,22 +5,15 @@
 use std::ffi::CString;
 use std::path::Path;
 
-use windows::core::PCSTR;
 use windows::Win32::Foundation::HMODULE;
 use windows::Win32::System::LibraryLoader::{
-    GetModuleFileNameA, GetModuleHandleExA, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GetModuleFileNameA, GetModuleHandleExA,
 };
-use windows::Win32::System::Threading::{
-    GetProcessAffinityMask, SetProcessAffinityMask,
-};
-use windows::Win32::System::WindowsProgramming::{
-    GetPrivateProfileIntA, GetPrivateProfileStringA,
-};
+use windows::Win32::System::Threading::{GetProcessAffinityMask, SetProcessAffinityMask};
+use windows::Win32::System::WindowsProgramming::{GetPrivateProfileIntA, GetPrivateProfileStringA};
+use windows::core::PCSTR;
 
-use crate::state::{
-    state, DMDFO_CENTER, DMDFO_DEFAULT, DMDFO_STRETCH, RENDERER_D3D9, RENDERER_GDI,
-    RENDERER_OPENGL,
-};
+use crate::state::{DMDFO_CENTER, DMDFO_DEFAULT, DMDFO_STRETCH, RENDERER_D3D9, RENDERER_GDI, RENDERER_OPENGL, state};
 
 const SETTINGS_SECTION: &str = "ddraw";
 
@@ -58,20 +51,12 @@ fn module_dir() -> Option<String> {
         let mut h = HMODULE::default();
         // 使用本函数地址反查自身模块句柄。
         let addr = module_dir as *const u8;
-        if GetModuleHandleExA(
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-            PCSTR(addr),
-            &mut h,
-        )
-        .is_ok()
-        {
+        if GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, PCSTR(addr), &mut h).is_ok() {
             let mut buf = [0u8; 1024];
             let n = GetModuleFileNameA(Some(h), &mut buf);
             if n > 0 {
                 let path = String::from_utf8_lossy(&buf[..n as usize]);
-                return std::path::Path::new(path.as_ref())
-                    .parent()
-                    .map(|p| p.to_string_lossy().to_string());
+                return std::path::Path::new(path.as_ref()).parent().map(|p| p.to_string_lossy().to_string());
             }
         }
     }
@@ -87,13 +72,7 @@ fn get_string(key: &str, default: &str) -> String {
     let def = CString::new(default).unwrap();
     let mut buf = vec![0u8; 256];
     let n = unsafe {
-        GetPrivateProfileStringA(
-            pcstr(&section()),
-            pcstr(&key),
-            pcstr(&def),
-            Some(buf.as_mut_slice()),
-            pcstr(&path()),
-        )
+        GetPrivateProfileStringA(pcstr(&section()), pcstr(&key), pcstr(&def), Some(buf.as_mut_slice()), pcstr(&path()))
     };
     if n == 0 {
         return default.to_string();
@@ -164,10 +143,7 @@ pub unsafe fn load() {
 
     // Environment variable overrides (mirrors ts-ddraw's DDRAW_* vars).
     if let Ok(v) = std::env::var("DDRAW_DRAW_FPS") {
-        if v.trim().eq_ignore_ascii_case("yes")
-            || v.trim().eq_ignore_ascii_case("true")
-            || v.trim() == "1"
-        {
+        if v.trim().eq_ignore_ascii_case("yes") || v.trim().eq_ignore_ascii_case("true") || v.trim() == "1" {
             s.draw_fps = true;
         }
     }

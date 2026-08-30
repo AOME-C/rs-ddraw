@@ -1,11 +1,11 @@
 use std::ffi::c_void;
-use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::DirectDraw::*;
+use windows::core::*;
 
+use crate::dd_log;
 use crate::ddraw::DirectDrawImpl;
 use crate::ddraw::clipper::ClipperImpl;
-use crate::dd_log;
 
 // --- Core DirectDraw exports ---
 
@@ -60,7 +60,12 @@ pub unsafe extern "system" fn DirectDrawCreateClipper(
     lplpddclipper: *mut Option<IDirectDrawClipper>,
     punkouter: *mut Option<IUnknown>,
 ) -> HRESULT {
-    dd_log!("DirectDrawCreateClipper(dwFlags={:#x}, lplpDDClipper={:p}, pUnkOuter={:p})", dwflags, lplpddclipper, punkouter);
+    dd_log!(
+        "DirectDrawCreateClipper(dwFlags={:#x}, lplpDDClipper={:p}, pUnkOuter={:p})",
+        dwflags,
+        lplpddclipper,
+        punkouter
+    );
     if lplpddclipper.is_null() {
         dd_log!("  -> E_INVALIDARG");
         return E_INVALIDARG;
@@ -72,19 +77,13 @@ pub unsafe extern "system" fn DirectDrawCreateClipper(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn DirectDrawEnumerateA(
-    _lpcallback: *mut c_void,
-    _lpcontext: *mut c_void,
-) -> HRESULT {
+pub unsafe extern "system" fn DirectDrawEnumerateA(_lpcallback: *mut c_void, _lpcontext: *mut c_void) -> HRESULT {
     dd_log!("DirectDrawEnumerateA -> DD_OK");
     HRESULT(0)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn DirectDrawEnumerateW(
-    _lpcallback: *mut c_void,
-    _lpcontext: *mut c_void,
-) -> HRESULT {
+pub unsafe extern "system" fn DirectDrawEnumerateW(_lpcallback: *mut c_void, _lpcontext: *mut c_void) -> HRESULT {
     dd_log!("DirectDrawEnumerateW -> DD_OK");
     HRESULT(0)
 }
@@ -112,24 +111,31 @@ pub unsafe extern "system" fn DirectDrawEnumerateExW(
 // --- Stub exports ---
 
 #[unsafe(no_mangle)]
-pub extern "system" fn AcquireDDThreadLock() -> u32 { 0 }
+pub extern "system" fn AcquireDDThreadLock() -> u32 {
+    0
+}
 
 #[unsafe(no_mangle)]
-pub extern "system" fn ReleaseDDThreadLock() -> u32 { 0 }
+pub extern "system" fn ReleaseDDThreadLock() -> u32 {
+    0
+}
 
 #[unsafe(no_mangle)]
-pub extern "system" fn CompleteCreateSysmemSurface(_a: u32) -> u32 { 0 }
+pub extern "system" fn CompleteCreateSysmemSurface(_a: u32) -> u32 {
+    0
+}
 
 #[unsafe(no_mangle)]
-pub extern "system" fn D3DParseUnknownCommand(
-    _lpcmd: *const c_void,
-    _lpretcmd: *mut *mut c_void,
-) -> HRESULT {
+pub extern "system" fn D3DParseUnknownCommand(_lpcmd: *const c_void, _lpretcmd: *mut *mut c_void) -> HRESULT {
     E_NOTIMPL
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn DDInternalLock(_a: u32, _b: u32) -> u32 { 0 }
+pub extern "system" fn DDInternalLock(_a: u32, _b: u32) -> u32 {
+    0
+}
 
 #[unsafe(no_mangle)]
-pub extern "system" fn DDInternalUnlock(_a: u32) -> u32 { 0 }
+pub extern "system" fn DDInternalUnlock(_a: u32) -> u32 {
+    0
+}

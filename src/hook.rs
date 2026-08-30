@@ -4,15 +4,13 @@
 //! cursor behave correctly under our wrapper.
 
 use windows::Win32::Foundation::*;
-use windows::core::BOOL;
 use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
-use windows::Win32::System::Memory::{
-    VirtualProtect, VirtualQuery, MEMORY_BASIC_INFORMATION, PAGE_READWRITE,
-};
+use windows::Win32::System::Memory::{MEMORY_BASIC_INFORMATION, PAGE_READWRITE, VirtualProtect, VirtualQuery};
 use windows::Win32::System::SystemServices::{
     IMAGE_DOS_HEADER, IMAGE_DOS_SIGNATURE, IMAGE_IMPORT_DESCRIPTOR, IMAGE_NT_SIGNATURE,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetWindowRect, SWP_NOSIZE};
+use windows::core::BOOL;
 
 use crate::state::state;
 use crate::window;
@@ -92,11 +90,8 @@ unsafe fn hook_iat(hmod: HMODULE, module_name: &[u8], function_name: &[u8], new_
         let imp_name = base.add(name_rva as usize) as *const u8;
         if ieq(imp_name, module_name) {
             let orig_rva = (*desc).Anonymous.OriginalFirstThunk;
-            let orig_base = if orig_rva != 0 {
-                base.add(orig_rva as usize)
-            } else {
-                base.add(first_thunk_rva as usize)
-            };
+            let orig_base =
+                if orig_rva != 0 { base.add(orig_rva as usize) } else { base.add(first_thunk_rva as usize) };
             let mut first = base.add(first_thunk_rva as usize) as *mut usize;
             let mut orig = orig_base as *const usize;
             let top_bit = 1usize << (usize::BITS - 1);
@@ -174,14 +169,7 @@ unsafe extern "system" fn fake_set_window_pos(
 }
 
 /// Replacement for `user32!MoveWindow` — forwards to the real call.
-unsafe extern "system" fn fake_move_window(
-    hwnd: HWND,
-    x: i32,
-    y: i32,
-    cx: i32,
-    cy: i32,
-    repaint: BOOL,
-) -> i32 {
+unsafe extern "system" fn fake_move_window(hwnd: HWND, x: i32, y: i32, cx: i32, cy: i32, repaint: BOOL) -> i32 {
     if let Some(f) = REAL_MOVEWINDOW {
         f(hwnd, x, y, cx, cy, repaint);
     }
@@ -200,12 +188,7 @@ unsafe extern "system" fn fake_get_cursor_pos(point: *mut POINT) -> i32 {
             (st.mouse_is_locked != 0, st.hwnd)
         };
         if locked && !hwnd.is_invalid() {
-            let mut wr = RECT {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-            };
+            let mut wr = RECT { left: 0, top: 0, right: 0, bottom: 0 };
             GetWindowRect(hwnd, &mut wr);
             if (*point).x < wr.left {
                 (*point).x = wr.left;
@@ -233,29 +216,12 @@ pub(crate) fn init() {
             let user32 = GetModuleHandleA(windows::core::PCSTR(b"user32.dll\0".as_ptr()));
             if let Ok(user32) = user32 {
                 REAL_SETPOS = to_fn(GetProcAddress(user32, windows::core::PCSTR(b"SetWindowPos\0".as_ptr())));
-                REAL_GETCURSORPOS =
-                    to_fn(GetProcAddress(user32, windows::core::PCSTR(b"GetCursorPos\0".as_ptr())));
-                REAL_MOVEWINDOW =
-                    to_fn(GetProcAddress(user32, windows::core::PCSTR(b"MoveWindow\0".as_ptr())));
+                REAL_GETCURSORPOS = to_fn(GetProcAddress(user32, windows::core::PCSTR(b"GetCursorPos\0".as_ptr())));
+                REAL_MOVEWINDOW = to_fn(GetProcAddress(user32, windows::core::PCSTR(b"MoveWindow\0".as_ptr())));
             }
-            hook_iat(
-                hmod,
-                b"user32.dll\0",
-                b"SetWindowPos\0",
-                fake_set_window_pos as usize,
-            );
-            hook_iat(
-                hmod,
-                b"user32.dll\0",
-                b"MoveWindow\0",
-                fake_move_window as usize,
-            );
-            hook_iat(
-                hmod,
-                b"user32.dll\0",
-                b"GetCursorPos\0",
-                fake_get_cursor_pos as usize,
-            );
+            hook_iat(hmod, b"user32.dll\0", b"SetWindowPos\0", fake_set_window_pos as usize);
+            hook_iat(hmod, b"user32.dll\0", b"MoveWindow\0", fake_move_window as usize);
+            hook_iat(hmod, b"user32.dll\0", b"GetCursorPos\0", fake_get_cursor_pos as usize);
         }
     });
 }

@@ -94,13 +94,16 @@ unsafe impl Send for ReentrantLock {}
 unsafe impl Sync for ReentrantLock {}
 
 use windows::Win32::Foundation::{HWND, RECT};
-use windows::Win32::Graphics::Gdi::{DEVMODEA, HBITMAP, HDC, HGDIOBJ};
+use windows::Win32::Graphics::DirectDraw::IDirectDrawPalette;
+use windows::Win32::Graphics::Gdi::{DEVMODEA, HBITMAP, HDC, HGDIOBJ, PALETTEENTRY};
 use windows::Win32::Graphics::OpenGL::{HGLRC, PIXELFORMATDESCRIPTOR};
 
 // Renderer types
 pub const RENDERER_GDI: i32 = 0;
 pub const RENDERER_OPENGL: i32 = 1;
 pub const RENDERER_D3D9: i32 = 2;
+/// OpenGL 3.2 core-profile renderer (cnc-ddraw `openglcore`).
+pub const RENDERER_OPENGL_CORE: i32 = 3;
 
 // DMDFO (fixed display output)
 pub const DMDFO_DEFAULT: u32 = 0x0000_0000;
@@ -271,6 +274,111 @@ pub struct DDrawState {
     /// the first `WaitForVerticalBlank` call; until then we fall back to the
     /// dirty flag so non-vblank games still update.
     pub uses_vblank: AtomicBool,
+    /// Upscale filter for all backends: 0=nearest, 1=bilinear, 2=catmull-rom,
+    /// 3=lanczos, 4=xBR. Applied in software before the final present.
+    pub filter: i32,
+    /// Directory for F12 screenshots (default: next to the DLL).
+    pub screenshot_dir: Option<String>,
+    /// Keep the window border visible in windowed mode.
+    pub border: bool,
+    /// Allow the window to be resized by the user.
+    pub resizable: bool,
+    /// Fake window/client size reported to the game via GetWindowRect /
+    /// GetClientRect (0,0 = report the real size).
+    pub fake_size: (i32, i32),
+    /// Fake OS version reported when the game calls GetVersionEx /
+    /// RtlGetVersion-style checks. (0,0) = real version. e.g. (5,1) = WinXP.
+    pub fake_version: (u32, u32),
+    /// The palette most recently attached to a surface by the game (single
+    /// global palette, like cnc-ddraw). 8-bit surfaces are expanded through it.
+    pub primary_palette: Option<IDirectDrawPalette>,
+
+    // ---- window / game compatibility (cnc-ddraw keys) ----
+    pub noactivateapp: bool,
+    pub fix_not_responding: bool,
+    pub no_compat_warning: bool,
+    pub game_handles_close: bool,
+    pub terminate_process: bool,
+    pub remove_menu: bool,
+    pub fix_alt_key_stuck: bool,
+    pub fixchilds: i32,
+    pub lock_surfaces: bool,
+    pub flipclear: bool,
+    pub tshack: bool,
+    pub vhack: bool,
+    pub devmode: bool,
+    pub limit_gdi_handles: bool,
+    pub guard_lines: i32,
+    pub min_font_size: i32,
+    pub anti_aliased_fonts_min_size: i32,
+    pub pos_x: i32,
+    pub pos_y: i32,
+    #[allow(clippy::doc_lazy_continuation)]
+    pub savesettings: i32,
+    /// 0 = never, 1 = auto, 2 = always.
+    pub center_window: i32,
+    /// Disable fullscreen-exclusive mode (cnc-ddraw `nonexclusive`); forces
+    /// `SetCooperativeLevel(DDSCL_EXCLUSIVE...)` to behave as windowed.
+    pub nonexclusive: bool,
+
+    // ---- display / resolution ----
+    /// Custom resolution override (0 = use the game-requested mode).
+    pub res_width: i32,
+    pub res_height: i32,
+    pub refresh_rate: i32,
+    /// EnumDisplaySettings list size: 0 small, 1 mini, 2 full.
+    pub resolutions: i32,
+    /// Cap on the number of enumerated display modes.
+    pub max_resolutions: i32,
+    pub inject_resolution: String,
+    pub fake_mode: String,
+
+    // ---- mouse / input ----
+    pub adjmouse: bool,
+    pub lock_mouse_top_left: bool,
+    pub center_cursor_fix: bool,
+    pub hook_peekmessage: bool,
+    pub no_dinput_hook: bool,
+    /// game -> window mouse scaling (adjmouse).
+    pub mouse_scale_x: f64,
+    pub mouse_scale_y: f64,
+    /// window -> game inverse mouse scaling.
+    pub mouse_scale_ix: f64,
+    pub mouse_scale_iy: f64,
+
+    // ---- fps / speed limiter ----
+    /// 0 auto, 1 TestCooperativeLevel, 2 BltFast, 3 Unlock, 4 PeekMessage.
+    pub limiter_type: i32,
+    /// Max game logic ticks/sec: -1 disabled, -2 refresh rate, 0 60Hz, n custom.
+    pub maxgameticks: i32,
+    /// Force minimum FPS: 0 disabled, -1 use maxfps, -2 force redraw, n cap.
+    pub minfps: i32,
+    /// cnc-ddraw `maxfps` (cap: -1 screen rate, 0 unlimited, n target fps).
+    pub maxfps: i32,
+
+    // ---- hotkeys (virtual key codes) ----
+    pub keytogglefullscreen: i32,
+    pub keytogglefullscreen2: i32,
+    pub keytogglemaximize: i32,
+    pub keytogglemaximize2: i32,
+    pub keyunlockcursor1: i32,
+    pub keyunlockcursor2: i32,
+    pub keyscreenshot: i32,
+    /// Hotkey (F11 by default) that toggles the in-game config overlay. 0 disables.
+    pub keyconfig: i32,
+    pub toggle_borderless: bool,
+    pub toggle_upscaled: bool,
+
+    // ---- renderer / GL ----
+    /// Shader selection: built-in name ("nearest"/"bilinear"/"bicubic"/
+    /// "lanczos"/"xbr-lv2") or path to a libretro-style .glsl file.
+    pub shader: String,
+    pub shaderpath: String,
+    pub shaderpath_pass1: String,
+
+    // ---- gamma ----
+    /// 256 RGB triples stored by IDirectDrawGammaControl::SetGammaRamp.
+    pub gamma_ramp: Option<[u16; 768]>,
 }
 
 unsafe impl Send for DDrawState {}
@@ -326,6 +434,69 @@ impl Default for DDrawState {
                 present_dirty: AtomicBool::new(false),
                 frame_ready: AtomicBool::new(false),
                 uses_vblank: AtomicBool::new(false),
+                filter: 0,
+                screenshot_dir: None,
+                border: false,
+                resizable: false,
+                fake_size: (0, 0),
+                fake_version: (0, 0),
+                primary_palette: None,
+                noactivateapp: false,
+                fix_not_responding: false,
+                no_compat_warning: false,
+                game_handles_close: false,
+                terminate_process: false,
+                remove_menu: false,
+                fix_alt_key_stuck: false,
+                fixchilds: 2,
+                lock_surfaces: false,
+                flipclear: false,
+                tshack: false,
+                vhack: false,
+                devmode: false,
+                limit_gdi_handles: false,
+                guard_lines: 200,
+                min_font_size: 0,
+                anti_aliased_fonts_min_size: 13,
+                pos_x: -32000,
+                pos_y: -32000,
+                savesettings: 1,
+                center_window: 1,
+                nonexclusive: true,
+                res_width: 0,
+                res_height: 0,
+                refresh_rate: 0,
+                resolutions: 0,
+                max_resolutions: 0,
+                inject_resolution: String::new(),
+                fake_mode: String::new(),
+                adjmouse: true,
+                lock_mouse_top_left: false,
+                center_cursor_fix: false,
+                hook_peekmessage: false,
+                no_dinput_hook: false,
+                mouse_scale_x: 1.0,
+                mouse_scale_y: 1.0,
+                mouse_scale_ix: 1.0,
+                mouse_scale_iy: 1.0,
+                limiter_type: 0,
+                maxgameticks: 0,
+                minfps: 0,
+                maxfps: 0,
+                keytogglefullscreen: 0x0D,
+                keytogglefullscreen2: 0,
+                keytogglemaximize: 0x22,
+                keytogglemaximize2: 0,
+                keyunlockcursor1: 0x09,
+                keyunlockcursor2: 0xA3,
+                keyscreenshot: 0x7B,
+                keyconfig: 0x7A,
+                toggle_borderless: false,
+                toggle_upscaled: false,
+                shader: "catmull-rom-bilinear.glsl".to_string(),
+                shaderpath: String::new(),
+                shaderpath_pass1: String::new(),
+                gamma_ramp: None,
             }
         }
     }
@@ -352,9 +523,39 @@ pub fn make_rect(l: i32, t: i32, r: i32, b: i32) -> RECT {
     RECT { left: l, top: t, right: r, bottom: b }
 }
 
+/// Register the palette the game most recently attached to a surface. 8-bit
+/// surfaces (blits and renderer uploads) are expanded through it, mirroring
+/// cnc-ddraw's single global `ddState.palette`. Keeping the COM interface
+/// means later `SetEntries` calls are automatically visible to the renderer.
+pub fn register_palette(p: &IDirectDrawPalette) {
+    state().lock().unwrap().primary_palette = Some(p.clone());
+}
+
+/// Snapshot of the active 8-bit palette as `[B, G, R, Flags]` per entry.
+/// Returns `None` when no palette has been attached yet.
+pub fn active_palette_entries() -> Option<[[u8; 4]; 256]> {
+    let pal = state().lock().unwrap().primary_palette.clone()?;
+    unsafe {
+        let mut entries = [std::mem::zeroed::<PALETTEENTRY>(); 256];
+        if pal.GetEntries(0, 0, 256, entries.as_mut_ptr()).is_err() {
+            return None;
+        }
+        let mut out = [[0u8; 4]; 256];
+        for (i, e) in entries.iter().enumerate() {
+            out[i] = [e.peBlue, e.peGreen, e.peRed, e.peFlags];
+        }
+        Some(out)
+    }
+}
+
 /// Interlocked-style read of the current renderer.
 pub fn renderer() -> i32 {
     state().lock().unwrap().renderer
+}
+
+/// Whether the game window currently holds focus (as far as we know).
+pub fn focused() -> bool {
+    state().lock().unwrap().focus_gained != 0
 }
 
 /// Mark the primary surface as changed so the renderer thread presents it.

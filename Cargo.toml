@@ -11,6 +11,7 @@ name = "ddraw"
 
 [dependencies]
 windows-core = "0.62"
+png = "0.17"
 windows = { version = "0.62", features = [
     "Win32_Graphics_Gdi",
     "Win32_Graphics_DirectDraw",
@@ -28,6 +29,11 @@ windows = { version = "0.62", features = [
     "Win32_System_WindowsProgramming",
     "Win32_System_Performance",
     "Win32_System_SystemServices",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Registry",
+    "Win32_System_Com",
+    "Win32_Media_Multimedia",
+    "Win32_Media_Audio",
 ] }
 
 [profile.release]

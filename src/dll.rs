@@ -34,12 +34,19 @@ pub unsafe extern "system" fn DllMain(h_module: HMODULE, dw_reason: u32, _lp_res
             dd_log!("DllMain(DLL_PROCESS_ATTACH) hModule={:p}", h_module.0);
             set_dpi_aware();
             start_kill_switch();
+            crate::debug::rotate_if_needed();
+            unsafe {
+                crate::debug::install_handler();
+            }
+            crate::media::init();
+            crate::dinput::init();
             unsafe {
                 let _ = DisableThreadLibraryCalls(h_module);
             }
         }
         DLL_PROCESS_DETACH => {
             dd_log!("DllMain(DLL_PROCESS_DETACH)");
+            crate::overlay::cleanup();
             crate::state::state().lock().unwrap().running.store(false, std::sync::atomic::Ordering::Relaxed);
         }
         _ => {}

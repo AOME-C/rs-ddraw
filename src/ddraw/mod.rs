@@ -4,6 +4,7 @@ pub(crate) mod clipper;
 pub(crate) mod palette;
 pub(crate) mod surface;
 
+use std::sync::Mutex;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::DirectDraw::*;
 use windows::Win32::Graphics::Gdi::{
@@ -70,7 +71,7 @@ fn fill_caps(caps: &mut DDCAPS_DX7) {
 }
 
 fn create_clipper() -> Result<IDirectDrawClipper> {
-    Ok(ClipperImpl { hwnd: 0 }.into())
+    Ok(ClipperImpl { hwnd: Mutex::new(0), clip: Mutex::new(Vec::new()), changed: Mutex::new(false) }.into())
 }
 
 fn create_palette(dwflags: u32, lpddcolorarray: *mut PALETTEENTRY) -> Result<IDirectDrawPalette> {
@@ -168,6 +169,61 @@ fn enum_display_modes(
             let bytes_pp = (bpp / 8).max(1);
             desc.Anonymous1.lPitch = (w * bytes_pp) as i32;
             fill_pixel_format(&mut desc.ddpfPixelFormat, bpp as i32);
+            let hr = unsafe { callback(&mut desc, context) };
+            if hr == HRESULT(0) {
+                return Ok(());
+            }
+            i += 1;
+        }
+    }
+    Ok(())
+}
+
+fn enum_display_modes2(
+    filter_desc: *mut DDSURFACEDESC2,
+    context: *mut core::ffi::c_void,
+    callback: LPDDENUMMODESCALLBACK2,
+) -> Result<()> {
+    let callback = match callback {
+        Some(f) => f,
+        None => return Ok(()),
+    };
+    let filter_res = if !filter_desc.is_null() {
+        let desc = unsafe { &*filter_desc };
+        if (desc.dwFlags & (DDSD_WIDTH | DDSD_HEIGHT) as u32) == (DDSD_WIDTH | DDSD_HEIGHT) as u32 {
+            Some((desc.dwWidth, desc.dwHeight))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    for &bpp in &[8u32, 16, 32] {
+        let mut dm = DEVMODEA::default();
+        let mut i = 0u32;
+        while unsafe { EnumDisplaySettingsA(None, ENUM_DISPLAY_SETTINGS_MODE(i), &mut dm).as_bool() } {
+            let w = dm.dmPelsWidth;
+            let h = dm.dmPelsHeight;
+            if let Some((fw, fh)) = filter_res
+                && (w != fw || h != fh)
+            {
+                i += 1;
+                continue;
+            }
+            let mut desc = DDSURFACEDESC2 {
+                dwSize: std::mem::size_of::<DDSURFACEDESC2>() as u32,
+                dwFlags: (DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT | DDSD_REFRESHRATE) as u32,
+                dwWidth: w,
+                dwHeight: h,
+                ..Default::default()
+            };
+            desc.Anonymous3.dwRefreshRate = 60;
+            let bytes_pp = (bpp / 8).max(1);
+            desc.Anonymous1.lPitch = (w * bytes_pp) as i32;
+            unsafe {
+                fill_pixel_format(&mut desc.Anonymous5.ddpfPixelFormat, bpp as i32);
+            }
             let hr = unsafe { callback(&mut desc, context) };
             if hr == HRESULT(0) {
                 return Ok(());
@@ -301,10 +357,16 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
         }
         Ok(())
     }
-    fn GetScanLine(&self, _a: *mut u32) -> Result<()> {
-        Err(Error::from(HRESULT(DXERR_UNSUPPORTED as i32)))
+    fn GetScanLine(&self, a: *mut u32) -> Result<()> {
+        if !a.is_null() {
+            unsafe { *a = 0 };
+        }
+        Ok(())
     }
-    fn GetVerticalBlankStatus(&self, _a: *mut BOOL) -> Result<()> {
+    fn GetVerticalBlankStatus(&self, a: *mut BOOL) -> Result<()> {
+        if !a.is_null() {
+            unsafe { *a = BOOL(0) };
+        }
         Ok(())
     }
     fn Initialize(&self, _a: *mut GUID) -> Result<()> {
@@ -322,10 +384,26 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
         if hwnd.is_invalid() {
             return Err(E_INVALIDARG.into());
         }
+        // `nonexclusive` (cnc-ddraw): strip the exclusive/fullscreen bits so the
+        // game always runs windowed instead of taking the monitor into exclusive
+        // fullscreen mode.
+        let effective = {
+            let st = state().lock().unwrap();
+            if st.nonexclusive && (flags & (DDSCL_EXCLUSIVE as u32 | DDSCL_FULLSCREEN as u32)) != 0 {
+                crate::dd_log!(
+                    "SetCooperativeLevel: nonexclusive downgrade {:#x} -> {:#x}",
+                    flags,
+                    flags & !(DDSCL_EXCLUSIVE as u32 | DDSCL_FULLSCREEN as u32)
+                );
+                flags & !(DDSCL_EXCLUSIVE as u32 | DDSCL_FULLSCREEN as u32)
+            } else {
+                flags
+            }
+        };
         unsafe {
             let mut st = state().lock().unwrap();
             st.bpp = 16;
-            st.dw_flags = flags;
+            st.dw_flags = effective;
             st.hwnd = hwnd;
             st.hdc = GetDC(Some(hwnd));
             st.wnd_proc = window::subclass(hwnd) as isize;
@@ -365,20 +443,30 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
             }
             crate::dd_log!("SetCooperativeLevel: screen dims done ({})", st.screen_width);
 
-            if flags & DDSCL_FULLSCREEN as u32 != 0 {
+            if effective & DDSCL_FULLSCREEN as u32 != 0 {
                 crate::dd_log!("SetCooperativeLevel: fullscreen mode");
             }
 
-            if flags & DDSCL_FULLSCREEN as u32 == 0 {
-                let rc = RECT {
-                    left: 0,
-                    top: 0,
-                    right: if st.win_rect.right != 0 { st.win_rect.right } else { st.width },
-                    bottom: if st.win_rect.bottom != 0 { st.win_rect.bottom } else { st.height },
-                };
-                let x = (st.screen_width / 2) - (rc.right / 2);
-                let y = (st.screen_height / 2) - (rc.bottom / 2);
-                let mut dst = RECT { left: x, top: y, right: rc.right + x, bottom: rc.bottom + y };
+            if effective & DDSCL_FULLSCREEN as u32 == 0 {
+                // Snapshot the layout before repositioning: SetWindowPos sends
+                // WM_SIZE/WM_MOVE synchronously and `wnd_proc` re-locks
+                // `state()`, so the lock must not be held across the call
+                // (the std mutex is not reentrant; this previously deadlocked
+                // the game's load thread right after this log line).
+                let (w, h, sw, sh, win_right, win_bottom) = (
+                    st.width,
+                    st.height,
+                    st.screen_width,
+                    st.screen_height,
+                    st.win_rect.right,
+                    st.win_rect.bottom,
+                );
+                drop(st);
+                let rw = if win_right != 0 { win_right } else { w };
+                let rh = if win_bottom != 0 { win_bottom } else { h };
+                let x = (sw / 2) - (rw / 2);
+                let y = (sh / 2) - (rh / 2);
+                let mut dst = RECT { left: x, top: y, right: rw + x, bottom: rh + y };
                 adjust_window_rect(&mut dst, hwnd);
                 crate::dd_log!("SetCooperativeLevel: windowed SetWindowPos begin");
                 SetWindowPos(
@@ -398,7 +486,7 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
     }
     fn SetDisplayMode(&self, w: u32, h: u32, bpp: u32) -> Result<()> {
         crate::dd_log!("IDirectDraw::SetDisplayMode({}, {}, {})", w, h, bpp);
-        if bpp != 16 {
+        if bpp != 8 && bpp != 16 && bpp != 32 {
             return Err(Error::from(DDERR_INVALIDMODE));
         }
         let gw = if w > 0 { w as i32 } else { 640 };
@@ -406,15 +494,20 @@ impl IDirectDraw_Impl for DirectDrawImpl_Impl {
         let mut st = state().lock().unwrap();
         st.width = gw;
         st.height = gh;
-        st.bpp = 16;
+        st.bpp = bpp as i32;
         drop(st);
-        crate::dd_log!("SetDisplayMode: before set_window_size");
+        crate::dd_log!("SetDisplayMode: bpp={} before set_window_size", bpp);
         unsafe {
             window::set_window_size(gw, gh);
         }
         crate::dd_log!("SetDisplayMode: after set_window_size");
-        unsafe {
-            window::set_display_mode(gw, gh, bpp as i32);
+        // Under `nonexclusive` we never force the monitor into the requested
+        // mode; the game stays windowed so the desktop mode is preserved.
+        let nonexclusive = state().lock().unwrap().nonexclusive;
+        if !nonexclusive {
+            unsafe {
+                window::set_display_mode(gw, gh, bpp as i32);
+            }
         }
         crate::dd_log!("SetDisplayMode: after set_display_mode");
         Ok(())
@@ -531,7 +624,13 @@ impl IDirectDraw2_Impl for DirectDrawImpl_Impl {
     fn WaitForVerticalBlank(&self, a: u32, b: HANDLE) -> Result<()> {
         IDirectDraw_Impl::WaitForVerticalBlank(self, a, b)
     }
-    fn GetAvailableVidMem(&self, _a: *mut DDSCAPS, _b: *mut u32, _c: *mut u32) -> Result<()> {
+    fn GetAvailableVidMem(&self, _a: *mut DDSCAPS, b: *mut u32, c: *mut u32) -> Result<()> {
+        if !b.is_null() {
+            unsafe { *b = 16 * 1024 * 1024 };
+        }
+        if !c.is_null() {
+            unsafe { *c = 16 * 1024 * 1024 };
+        }
         Ok(())
     }
 }
@@ -595,11 +694,11 @@ impl IDirectDraw4_Impl for DirectDrawImpl_Impl {
     fn EnumDisplayModes(
         &self,
         _a: u32,
-        _b: *mut DDSURFACEDESC2,
-        _c: *mut core::ffi::c_void,
-        _d: LPDDENUMMODESCALLBACK2,
+        b: *mut DDSURFACEDESC2,
+        c: *mut core::ffi::c_void,
+        d: LPDDENUMMODESCALLBACK2,
     ) -> Result<()> {
-        Ok(())
+        enum_display_modes2(b, c, d)
     }
     fn EnumSurfaces(
         &self,
@@ -668,7 +767,13 @@ impl IDirectDraw4_Impl for DirectDrawImpl_Impl {
     fn WaitForVerticalBlank(&self, a: u32, b: HANDLE) -> Result<()> {
         IDirectDraw_Impl::WaitForVerticalBlank(self, a, b)
     }
-    fn GetAvailableVidMem(&self, _a: *mut DDSCAPS2, _b: *mut u32, _c: *mut u32) -> Result<()> {
+    fn GetAvailableVidMem(&self, _a: *mut DDSCAPS2, b: *mut u32, c: *mut u32) -> Result<()> {
+        if !b.is_null() {
+            unsafe { *b = 16 * 1024 * 1024 };
+        }
+        if !c.is_null() {
+            unsafe { *c = 16 * 1024 * 1024 };
+        }
         Ok(())
     }
     fn GetSurfaceFromDC(&self, _hdc: HDC) -> Result<IDirectDrawSurface4> {
@@ -678,6 +783,9 @@ impl IDirectDraw4_Impl for DirectDrawImpl_Impl {
         Ok(())
     }
     fn TestCooperativeLevel(&self) -> Result<()> {
+        if crate::fps_limiter::limiter_applies(crate::fps_limiter::LIMIT_TEST_COOPERATIVE_LEVEL) {
+            crate::fps_limiter::wait_game_tick();
+        }
         Ok(())
     }
     fn GetDeviceIdentifier(&self, _a: *mut DDDEVICEIDENTIFIER, _b: u32) -> Result<()> {
@@ -744,11 +852,11 @@ impl IDirectDraw7_Impl for DirectDrawImpl_Impl {
     fn EnumDisplayModes(
         &self,
         _a: u32,
-        _b: *mut DDSURFACEDESC2,
-        _c: *mut core::ffi::c_void,
-        _d: LPDDENUMMODESCALLBACK2,
+        b: *mut DDSURFACEDESC2,
+        c: *mut core::ffi::c_void,
+        d: LPDDENUMMODESCALLBACK2,
     ) -> Result<()> {
-        Ok(())
+        enum_display_modes2(b, c, d)
     }
     fn EnumSurfaces(
         &self,
@@ -817,7 +925,13 @@ impl IDirectDraw7_Impl for DirectDrawImpl_Impl {
     fn WaitForVerticalBlank(&self, a: u32, b: HANDLE) -> Result<()> {
         IDirectDraw_Impl::WaitForVerticalBlank(self, a, b)
     }
-    fn GetAvailableVidMem(&self, _a: *mut DDSCAPS2, _b: *mut u32, _c: *mut u32) -> Result<()> {
+    fn GetAvailableVidMem(&self, _a: *mut DDSCAPS2, b: *mut u32, c: *mut u32) -> Result<()> {
+        if !b.is_null() {
+            unsafe { *b = 16 * 1024 * 1024 };
+        }
+        if !c.is_null() {
+            unsafe { *c = 16 * 1024 * 1024 };
+        }
         Ok(())
     }
     fn GetSurfaceFromDC(&self, _hdc: HDC) -> Result<IDirectDrawSurface7> {
@@ -827,6 +941,9 @@ impl IDirectDraw7_Impl for DirectDrawImpl_Impl {
         Ok(())
     }
     fn TestCooperativeLevel(&self) -> Result<()> {
+        if crate::fps_limiter::limiter_applies(crate::fps_limiter::LIMIT_TEST_COOPERATIVE_LEVEL) {
+            crate::fps_limiter::wait_game_tick();
+        }
         Ok(())
     }
     fn GetDeviceIdentifier(&self, _a: *mut DDDEVICEIDENTIFIER2, _b: u32) -> Result<()> {

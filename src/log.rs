@@ -25,7 +25,8 @@ fn log_path(h_module: HMODULE) -> std::path::PathBuf {
         && let Ok(s) = std::str::from_utf8(&buf[..len])
     {
         let mut p = std::path::PathBuf::from(s);
-        p.set_file_name("rs-ddraw.log");
+        let name = crate::config::log_file_name();
+        p.set_file_name(if name.is_empty() { String::from("rs-ddraw.log") } else { name });
         return p;
     }
     std::path::PathBuf::from("rs-ddraw.log")

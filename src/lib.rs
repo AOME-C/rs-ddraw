@@ -1,3 +1,5 @@
+//! DirectDraw compatibility wrapper for legacy 2D games.
+
 #![allow(dead_code)]
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(unused_must_use)]
@@ -12,16 +14,21 @@ pub static AmdPowerXpressRequestHighPerformance: i32 = 1;
 
 pub(crate) mod log;
 
-mod blt;
 mod config;
 mod counter;
 mod ddraw;
+mod debug;
+mod dinput;
 mod dll;
 mod exports;
-mod fps;
+mod fps_limiter;
+mod gamma;
 mod hook;
-mod input;
+mod media;
+mod mouse;
+mod overlay;
 mod render;
+mod screenshot;
 mod state;
 mod util;
 mod window;
